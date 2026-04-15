@@ -4,6 +4,9 @@ A minimalistic multi-project Kanban board for personal use, built with C++ and Q
 
 *WARNING*: This project contains 99% of "vibe-code"
 
+## UI
+<img width="1208" height="737" alt="image" src="https://github.com/user-attachments/assets/27ea9ad6-7a6b-4331-a8f6-2402135e93e5" />
+
 ## Features
 
 - **Multiple projects** — create, rename, and delete projects from the left panel

@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0] — 2026-04-15
+
+### Added
+- Unit tests for `MarkdownIO` and `AppState` using Qt Test (`tests/`)
+- GitHub Actions CI workflow: builds the project and runs tests on every push and pull request
+
+### Changed
+- Model code extracted into a `ptb_model` static library so tests can link it without pulling in Qt::Widgets
+
+## [0.3.0] — 2026-04-15
+
+### Changed
+- Removed hardcoded sample project — app starts with an empty board on first run
+
 ## [0.2.0] — 2026-04-15
 
 ### Added

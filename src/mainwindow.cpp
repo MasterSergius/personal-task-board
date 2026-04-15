@@ -25,22 +25,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_state(boardsDirectory())
 {
     m_state.load();
-
-    if (m_state.projectCount() == 0)
-        seedSampleData();
-
     setupUI();
-}
-
-void MainWindow::seedSampleData()
-{
-    int idx = m_state.addProject("Sample Project");
-    m_state.addColumn(idx, "To Do");
-    m_state.addColumn(idx, "In Progress");
-    m_state.addColumn(idx, "Done");
-    m_state.addTask(idx, 0, "Create your first task");
-    m_state.addTask(idx, 0, "Right-click a card to delete it");
-    m_state.addTask(idx, 1, "Drag cards between columns");
 }
 
 // ─── UI setup ─────────────────────────────────────────────────────────────────

@@ -27,14 +27,13 @@ private slots:
 
 private:
     void setupUI();
-    void seedSampleData();
     void refreshProjectList(int selectRow = -1);
 
     void addProjectDialog();
     void renameProjectDialog();
     void deleteCurrentProject();
 
-    /** Returns the boards/ directory next to the executable. */
+    /** Returns ~/.ptb/projects where board .md files are stored. */
     static QString boardsDirectory();
 
     AppState m_state;

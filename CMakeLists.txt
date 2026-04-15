@@ -7,21 +7,32 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Test)
 
-set(SOURCES
+# ── Model library ─────────────────────────────────────────────────────────────
+# Compiled separately so the test suite can link it without pulling in
+# Qt::Widgets or the application's UI code.
+
+add_library(ptb_model STATIC
+    src/model/appstate.cpp
+    src/model/markdownio.cpp
+)
+set_target_properties(ptb_model PROPERTIES AUTOMOC OFF)
+target_include_directories(ptb_model PUBLIC src)
+target_link_libraries(ptb_model Qt6::Core)
+
+# ── Main application ──────────────────────────────────────────────────────────
+
+add_executable(ptb
     src/main.cpp
     src/mainwindow.cpp
     src/boardview.cpp
     src/columnwidget.cpp
     src/cardwidget.cpp
-    src/model/appstate.cpp
-    src/model/markdownio.cpp
 )
+target_link_libraries(ptb ptb_model Qt6::Widgets)
 
-add_executable(ptb ${SOURCES})
+# ── Tests ─────────────────────────────────────────────────────────────────────
 
-# Make src/ a root for includes so model/*.h can be included as "model/foo.h"
-target_include_directories(ptb PRIVATE src)
-
-target_link_libraries(ptb Qt6::Widgets)
+enable_testing()
+add_subdirectory(tests)

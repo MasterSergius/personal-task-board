@@ -1,16 +1,74 @@
 #include "columnwidget.h"
 
+#include <QApplication>
+#include <QDrag>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QEvent>
 #include <QInputDialog>
 #include <QLabel>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QVBoxLayout>
 
 #include "cardwidget.h"
+
+// ─── ColumnHeader ─────────────────────────────────────────────────────────────
+//
+// A QLabel subclass that initiates a column-reorder drag when the user
+// clicks and drags. The MIME text is "ptb-column:<colIdx>".
+
+class ColumnHeader : public QLabel
+{
+    Q_OBJECT
+
+public:
+    ColumnHeader(const QString &text, int colIdx, QWidget *parent = nullptr)
+        : QLabel(text, parent), m_colIdx(colIdx)
+    {
+        setCursor(Qt::SizeHorCursor);
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override
+    {
+        if (event->button() == Qt::LeftButton)
+            m_dragStartPos = event->pos();
+        QLabel::mousePressEvent(event);
+    }
+
+    void mouseMoveEvent(QMouseEvent *event) override
+    {
+        if (!(event->buttons() & Qt::LeftButton) || m_dragStartPos.isNull())
+            return;
+        if ((event->pos() - m_dragStartPos).manhattanLength() < QApplication::startDragDistance())
+            return;
+
+        // Reset before exec() to prevent re-entrancy
+        m_dragStartPos = QPoint();
+
+        auto *drag = new QDrag(this);
+        auto *mime = new QMimeData();
+        mime->setText(QString("ptb-column:%1").arg(m_colIdx));
+        drag->setMimeData(mime);
+        drag->setPixmap(grab());
+        drag->setHotSpot(event->pos());
+        drag->exec(Qt::MoveAction);
+        // The drop target (ColumnWidget) emits columnMoveRequested; nothing to do here.
+    }
+
+private:
+    int    m_colIdx;
+    QPoint m_dragStartPos;
+};
+
+// Required for Q_OBJECT defined in a .cpp file
+#include "columnwidget.moc"
+
+// ─── ColumnWidget ─────────────────────────────────────────────────────────────
 
 ColumnWidget::ColumnWidget(AppState &state, int projectIdx, int colIdx, QWidget *parent)
     : QWidget(parent)
@@ -20,17 +78,18 @@ ColumnWidget::ColumnWidget(AppState &state, int projectIdx, int colIdx, QWidget 
 {
     setFixedWidth(240);
     setAcceptDrops(true);
-    setStyleSheet("QWidget { background: #e8e8e8; border-radius: 8px; }");
+    setStyleSheet("QWidget#column { background: #e8e8e8; border-radius: 8px; }");
+    setObjectName("column");
 
     auto *outerLayout = new QVBoxLayout(this);
     outerLayout->setContentsMargins(8, 8, 8, 8);
     outerLayout->setSpacing(6);
 
-    // ── Header ────────────────────────────────────────────────────────────────
+    // ── Header (drag handle for column reordering) ────────────────────────────
     const QString &name = m_state.project(projectIdx).columns[colIdx].name;
-    m_headerLabel = new QLabel(name);
+    m_headerLabel = new ColumnHeader(name, colIdx, this);
     m_headerLabel->setStyleSheet(
-        "font-weight: bold; font-size: 14px; background: transparent; border: none;");
+        "font-weight: bold; font-size: 14px; background: transparent; border: none; padding: 2px;");
     m_headerLabel->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_headerLabel, &QLabel::customContextMenuRequested,
             this, &ColumnWidget::showHeaderContextMenu);
@@ -38,9 +97,12 @@ ColumnWidget::ColumnWidget(AppState &state, int projectIdx, int colIdx, QWidget 
     // ── Add Task button ───────────────────────────────────────────────────────
     auto *addBtn = new QPushButton("+ Add Task");
     addBtn->setStyleSheet(
-        "QPushButton { text-align: left; background: transparent; border: none; color: #555; }"
+        "QPushButton { text-align: left; background: transparent; border: none; color: #555; padding: 2px; }"
         "QPushButton:hover { color: #000; }");
     connect(addBtn, &QPushButton::clicked, this, &ColumnWidget::addTaskDialog);
+
+    // Forward drag events from the button so drops on it reach this column
+    addBtn->installEventFilter(this);
 
     // ── Cards area ────────────────────────────────────────────────────────────
     auto *cardsContainer = new QWidget();
@@ -61,7 +123,6 @@ ColumnWidget::ColumnWidget(AppState &state, int projectIdx, int colIdx, QWidget 
 
 void ColumnWidget::buildCards()
 {
-    // Clear existing card widgets
     while (m_cardsLayout->count() > 0) {
         auto *item = m_cardsLayout->takeAt(0);
         if (item->widget())
@@ -72,15 +133,27 @@ void ColumnWidget::buildCards()
     const auto &tasks = m_state.project(m_projectIdx).columns[m_colIdx].tasks;
     for (int i = 0; i < tasks.size(); ++i) {
         auto *card = new CardWidget(tasks[i].title, m_projectIdx, m_colIdx, i);
-
-        // Route the card's delete request up to BoardView via our own signal
         connect(card, &CardWidget::deleteRequested,
                 this, [this](int colIdx, int taskIdx) {
                     emit taskDeleted(colIdx, taskIdx);
                 });
-
         m_cardsLayout->addWidget(card);
     }
+}
+
+// ─── Event filter (forwards drops from Add Task button to this column) ────────
+
+bool ColumnWidget::eventFilter(QObject * /*watched*/, QEvent *event)
+{
+    if (event->type() == QEvent::DragEnter) {
+        dragEnterEvent(static_cast<QDragEnterEvent *>(event));
+        return true;
+    }
+    if (event->type() == QEvent::Drop) {
+        dropEvent(static_cast<QDropEvent *>(event));
+        return true;
+    }
+    return false;
 }
 
 // ─── Header context menu ──────────────────────────────────────────────────────
@@ -90,6 +163,10 @@ void ColumnWidget::showHeaderContextMenu(const QPoint &pos)
     const auto &cols = m_state.project(m_projectIdx).columns;
 
     QMenu menu(this);
+    menu.setStyleSheet(
+        "QMenu { background: #ffffff; color: #111111; border: 1px solid #cccccc; }"
+        "QMenu::item:selected { background: #0078d4; color: #ffffff; }"
+        "QMenu::separator { height: 1px; background: #cccccc; margin: 4px 8px; }");
     QAction *renameAction    = menu.addAction("Rename Column");
     QAction *moveLeftAction  = menu.addAction("Move Left");
     QAction *moveRightAction = menu.addAction("Move Right");
@@ -106,7 +183,6 @@ void ColumnWidget::showHeaderContextMenu(const QPoint &pos)
         QString newName = QInputDialog::getText(
             this, "Rename Column", "New name:",
             QLineEdit::Normal, cols[m_colIdx].name, &ok);
-
         if (ok && !newName.trimmed().isEmpty())
             emit renameRequested(m_colIdx, newName.trimmed());
 
@@ -122,7 +198,6 @@ void ColumnWidget::showHeaderContextMenu(const QPoint &pos)
             QString("Delete column \"%1\" and all its tasks?\nThis cannot be undone.")
                 .arg(cols[m_colIdx].name),
             QMessageBox::Yes | QMessageBox::No);
-
         if (reply == QMessageBox::Yes)
             emit deleteRequested(m_colIdx);
     }
@@ -135,7 +210,6 @@ void ColumnWidget::addTaskDialog()
     bool ok;
     QString title = QInputDialog::getText(
         this, "Add Task", "Task title:", QLineEdit::Normal, "", &ok);
-
     if (ok && !title.trimmed().isEmpty())
         emit taskAdded(m_colIdx, title.trimmed());
 }
@@ -150,7 +224,21 @@ void ColumnWidget::dragEnterEvent(QDragEnterEvent *event)
 
 void ColumnWidget::dropEvent(QDropEvent *event)
 {
-    const QStringList parts = event->mimeData()->text().split(':');
+    const QString text = event->mimeData()->text();
+
+    // ── Column reorder drag ───────────────────────────────────────────────────
+    if (text.startsWith("ptb-column:")) {
+        bool ok;
+        int fromColIdx = text.mid(11).toInt(&ok);
+        if (ok && fromColIdx != m_colIdx) {
+            event->acceptProposedAction();
+            emit columnMoveRequested(fromColIdx, m_colIdx);
+        }
+        return;
+    }
+
+    // ── Task drag: "fromColIdx:taskIdx" ───────────────────────────────────────
+    const QStringList parts = text.split(':');
     if (parts.size() != 2)
         return;
 
@@ -161,9 +249,10 @@ void ColumnWidget::dropEvent(QDropEvent *event)
     if (!ok1 || !ok2)
         return;
 
-    event->acceptProposedAction();
+    // Ignore same-column drops so the card's show() path restores it correctly
+    if (fromColIdx == m_colIdx)
+        return;
 
-    if (fromColIdx != m_colIdx)
-        emit taskMoved(fromColIdx, taskIdx, m_colIdx);
-    // Same-column drop: just let BoardView's deferred refresh restore the card
+    event->acceptProposedAction();
+    emit taskMoved(fromColIdx, taskIdx, m_colIdx);
 }

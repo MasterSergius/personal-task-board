@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QLabel>
@@ -16,7 +17,7 @@
 
 QString MainWindow::boardsDirectory()
 {
-    return QCoreApplication::applicationDirPath() + "/boards";
+    return QDir::homePath() + "/.ptb/projects";
 }
 
 MainWindow::MainWindow(QWidget *parent)
@@ -142,20 +143,36 @@ void MainWindow::onProjectSelectionChanged(int row)
 
 void MainWindow::showProjectContextMenu(const QPoint &pos)
 {
+    static const char *kMenuStyle =
+        "QMenu { background: #ffffff; color: #111111; border: 1px solid #cccccc; }"
+        "QMenu::item:selected { background: #0078d4; color: #ffffff; }"
+        "QMenu::separator { height: 1px; background: #cccccc; margin: 4px 8px; }";
+
+    QListWidgetItem *item = m_projectList->itemAt(pos);
+
     QMenu menu(this);
-    QAction *addAction    = menu.addAction("Add Project…");
-    QAction *renameAction = menu.addAction("Rename Project…");
-    QAction *deleteAction = menu.addAction("Delete Project");
+    menu.setStyleSheet(kMenuStyle);
 
-    const bool hasProject = (m_projectList->currentRow() >= 0);
-    renameAction->setEnabled(hasProject);
-    deleteAction->setEnabled(hasProject);
+    if (item) {
+        // Right-clicked on a specific project: select it first so rename/delete
+        // operate on the intended row, not whatever was previously highlighted.
+        m_projectList->setCurrentItem(item);
 
-    QAction *selected = menu.exec(m_projectList->mapToGlobal(pos));
+        QAction *renameAction = menu.addAction("Rename Project…");
+        QAction *deleteAction = menu.addAction("Delete Project");
+        menu.addSeparator();
+        QAction *addAction    = menu.addAction("Add Project…");
 
-    if      (selected == addAction)    addProjectDialog();
-    else if (selected == renameAction) renameProjectDialog();
-    else if (selected == deleteAction) deleteCurrentProject();
+        QAction *selected = menu.exec(m_projectList->mapToGlobal(pos));
+        if      (selected == renameAction) renameProjectDialog();
+        else if (selected == deleteAction) deleteCurrentProject();
+        else if (selected == addAction)    addProjectDialog();
+    } else {
+        // Right-clicked on empty space: only offer adding a new project.
+        QAction *addAction = menu.addAction("Add Project…");
+        if (menu.exec(m_projectList->mapToGlobal(pos)) == addAction)
+            addProjectDialog();
+    }
 }
 
 // ─── Dialogs ──────────────────────────────────────────────────────────────────

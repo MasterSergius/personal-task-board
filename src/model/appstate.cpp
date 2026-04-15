@@ -86,21 +86,23 @@ void AppState::renameColumn(int projectIdx, int colIdx, const QString &name)
     save(projectIdx);
 }
 
+void AppState::moveColumn(int projectIdx, int from, int to)
+{
+    auto &cols = m_projects[projectIdx].columns;
+    if (from == to || from < 0 || to < 0 || from >= cols.size() || to >= cols.size())
+        return;
+    cols.insert(to, cols.takeAt(from));
+    save(projectIdx);
+}
+
 void AppState::moveColumnLeft(int projectIdx, int colIdx)
 {
-    if (colIdx <= 0)
-        return;
-    m_projects[projectIdx].columns.swapItemsAt(colIdx - 1, colIdx);
-    save(projectIdx);
+    moveColumn(projectIdx, colIdx, colIdx - 1);
 }
 
 void AppState::moveColumnRight(int projectIdx, int colIdx)
 {
-    auto &cols = m_projects[projectIdx].columns;
-    if (colIdx >= cols.size() - 1)
-        return;
-    cols.swapItemsAt(colIdx, colIdx + 1);
-    save(projectIdx);
+    moveColumn(projectIdx, colIdx, colIdx + 1);
 }
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────

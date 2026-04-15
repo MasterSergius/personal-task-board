@@ -48,6 +48,9 @@ public:
     void addColumn(int projectIdx, const QString &name);
     void removeColumn(int projectIdx, int colIdx);
     void renameColumn(int projectIdx, int colIdx, const QString &name);
+
+    /** Move column from position 'from' to position 'to' (order preserved). */
+    void moveColumn(int projectIdx, int from, int to);
     void moveColumnLeft(int projectIdx, int colIdx);
     void moveColumnRight(int projectIdx, int colIdx);
 

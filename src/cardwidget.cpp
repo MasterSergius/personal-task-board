@@ -75,7 +75,7 @@ void CardWidget::mouseMoveEvent(QMouseEvent *event)
     // If the drop was cancelled the board is NOT refreshed, so we must reappear
     if (result != Qt::MoveAction)
         show();
-    // On success: BoardView::refresh() (deferred via QTimer) recreates all cards
+    // On success: BoardView::refresh() (called synchronously from the drop slot) recreates all cards
 
     m_dragStartPos = QPoint();
 }
@@ -85,6 +85,9 @@ void CardWidget::mouseMoveEvent(QMouseEvent *event)
 void CardWidget::contextMenuEvent(QContextMenuEvent *event)
 {
     QMenu menu(this);
+    menu.setStyleSheet(
+        "QMenu { background: #ffffff; color: #111111; border: 1px solid #cccccc; }"
+        "QMenu::item:selected { background: #0078d4; color: #ffffff; }");
     QAction *deleteAction = menu.addAction("Delete Task");
 
     if (menu.exec(event->globalPos()) == deleteAction) {

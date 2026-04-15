@@ -1,23 +1,45 @@
 #pragma once
 
 #include <QMainWindow>
+#include "model/appstate.h"
 
 class QListWidget;
 class QSplitter;
 class BoardView;
 
+/**
+ * Application main window.
+ *
+ * Left panel: project list (QListWidget) with right-click context menu
+ *             for add / rename / delete.
+ * Right panel: BoardView for the currently selected project.
+ */
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
 public:
-    MainWindow(QWidget *parent = nullptr);
+    explicit MainWindow(QWidget *parent = nullptr);
+
+private slots:
+    void onProjectSelectionChanged(int row);
+    void showProjectContextMenu(const QPoint &pos);
 
 private:
     void setupUI();
-    void showProjectsContextMenu(const QPoint &pos);
+    void seedSampleData();
+    void refreshProjectList(int selectRow = -1);
 
-    QSplitter *splitter;
-    QListWidget *projectsList;
-    BoardView *board;
+    void addProjectDialog();
+    void renameProjectDialog();
+    void deleteCurrentProject();
+
+    /** Returns the boards/ directory next to the executable. */
+    static QString boardsDirectory();
+
+    AppState m_state;
+
+    QSplitter   *m_splitter     = nullptr;
+    QListWidget *m_projectList  = nullptr;
+    BoardView   *m_board        = nullptr;
 };

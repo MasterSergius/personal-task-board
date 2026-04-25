@@ -8,6 +8,7 @@
 #include <QListWidget>
 #include <QMenu>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QSplitter>
 #include <QWidget>
 
@@ -45,38 +46,32 @@ void MainWindow::setupUI()
     m_splitter = new QSplitter(Qt::Horizontal, central);
 
     // ── Left: project list ────────────────────────────────────────────────────
-    auto *sidePanel = new QWidget();
-    sidePanel->setMaximumWidth(220);
-    sidePanel->setMinimumWidth(140);
-    sidePanel->setStyleSheet("background: #2d2d2d;");
+    m_sidePanel = new QWidget();
+    m_sidePanel->setMaximumWidth(220);
+    m_sidePanel->setMinimumWidth(140);
 
-    auto *sideLayout = new QVBoxLayout(sidePanel);
+    auto *sideLayout = new QVBoxLayout(m_sidePanel);
     sideLayout->setContentsMargins(0, 8, 0, 8);
     sideLayout->setSpacing(0);
 
-    auto *sideTitle = new QLabel("  Projects");
-    sideTitle->setStyleSheet("color: #aaa; font-size: 11px; font-weight: bold; padding: 4px 8px;");
-    sideLayout->addWidget(sideTitle);
+    // Header row: "Projects" label + theme toggle button
+    auto *headerRow = new QWidget();
+    auto *headerLayout = new QHBoxLayout(headerRow);
+    headerLayout->setContentsMargins(0, 0, 4, 0);
+    headerLayout->setSpacing(0);
+
+    m_sideTitle = new QLabel("  Projects");
+    headerLayout->addWidget(m_sideTitle, 1);
+
+    m_toggleBtn = new QPushButton("Dark");
+    m_toggleBtn->setFixedHeight(20);
+    m_toggleBtn->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+    connect(m_toggleBtn, &QPushButton::clicked, this, &MainWindow::toggleTheme);
+    headerLayout->addWidget(m_toggleBtn);
+
+    sideLayout->addWidget(headerRow);
 
     m_projectList = new QListWidget();
-    m_projectList->setStyleSheet(R"(
-        QListWidget {
-            background: transparent;
-            border: none;
-            color: #ddd;
-        }
-        QListWidget::item {
-            padding: 6px 12px;
-        }
-        QListWidget::item:selected {
-            background: #4a4a4a;
-            color: #fff;
-            border-radius: 4px;
-        }
-        QListWidget::item:hover:!selected {
-            background: #3a3a3a;
-        }
-    )");
     m_projectList->setContextMenuPolicy(Qt::CustomContextMenu);
 
     connect(m_projectList, &QListWidget::currentRowChanged,
@@ -89,7 +84,7 @@ void MainWindow::setupUI()
     // ── Right: board view ─────────────────────────────────────────────────────
     m_board = new BoardView(m_state, this);
 
-    m_splitter->addWidget(sidePanel);
+    m_splitter->addWidget(m_sidePanel);
     m_splitter->addWidget(m_board);
     m_splitter->setStretchFactor(0, 0);
     m_splitter->setStretchFactor(1, 1);
@@ -97,7 +92,26 @@ void MainWindow::setupUI()
 
     layout->addWidget(m_splitter);
 
+    applyTheme();
     refreshProjectList(0);
+}
+
+// ─── Theme ────────────────────────────────────────────────────────────────────
+
+void MainWindow::applyTheme()
+{
+    m_sidePanel->setStyleSheet(m_theme.sidebarBg);
+    m_sideTitle->setStyleSheet(m_theme.sidebarTitleStyle);
+    m_projectList->setStyleSheet(m_theme.projectListStyle);
+    m_toggleBtn->setText(m_theme.isDark ? "Light" : "Dark");
+    m_toggleBtn->setStyleSheet(m_theme.toggleBtnStyle);
+    m_board->applyTheme(m_theme);
+}
+
+void MainWindow::toggleTheme()
+{
+    m_theme = m_theme.isDark ? Theme::light() : Theme::dark();
+    applyTheme();
 }
 
 // ─── Project list ─────────────────────────────────────────────────────────────
@@ -128,15 +142,10 @@ void MainWindow::onProjectSelectionChanged(int row)
 
 void MainWindow::showProjectContextMenu(const QPoint &pos)
 {
-    static const char *kMenuStyle =
-        "QMenu { background: #ffffff; color: #111111; border: 1px solid #cccccc; }"
-        "QMenu::item:selected { background: #0078d4; color: #ffffff; }"
-        "QMenu::separator { height: 1px; background: #cccccc; margin: 4px 8px; }";
-
     QListWidgetItem *item = m_projectList->itemAt(pos);
 
     QMenu menu(this);
-    menu.setStyleSheet(kMenuStyle);
+    menu.setStyleSheet(m_theme.menuStyle);
 
     if (item) {
         // Right-clicked on a specific project: select it first so rename/delete

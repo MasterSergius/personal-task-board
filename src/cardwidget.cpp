@@ -11,23 +11,14 @@
 #include <QVBoxLayout>
 
 CardWidget::CardWidget(const QString &title, int projectIdx, int colIdx, int taskIdx,
-                       QWidget *parent)
+                       const Theme &theme, QWidget *parent)
     : QFrame(parent)
     , m_projectIdx(projectIdx)
     , m_colIdx(colIdx)
     , m_taskIdx(taskIdx)
+    , m_theme(theme)
 {
-    setStyleSheet(R"(
-        QFrame {
-            border: 1px solid #b0b0b0;
-            border-radius: 6px;
-            background: #fafafa;
-        }
-        QFrame:hover {
-            background: #f0f0f0;
-            border-color: #888;
-        }
-    )");
+    setStyleSheet(theme.cardStyle);
     setCursor(Qt::OpenHandCursor);
 
     auto *layout = new QVBoxLayout(this);
@@ -35,8 +26,7 @@ CardWidget::CardWidget(const QString &title, int projectIdx, int colIdx, int tas
 
     m_label = new QLabel(title);
     m_label->setWordWrap(true);
-    // Labels must be transparent so the frame's stylesheet shows through
-    m_label->setStyleSheet("border: none; background: transparent;");
+    m_label->setStyleSheet(theme.cardLabelStyle);
     layout->addWidget(m_label);
 }
 
@@ -85,9 +75,7 @@ void CardWidget::mouseMoveEvent(QMouseEvent *event)
 void CardWidget::contextMenuEvent(QContextMenuEvent *event)
 {
     QMenu menu(this);
-    menu.setStyleSheet(
-        "QMenu { background: #ffffff; color: #111111; border: 1px solid #cccccc; }"
-        "QMenu::item:selected { background: #0078d4; color: #ffffff; }");
+    menu.setStyleSheet(m_theme.menuStyle);
     QAction *deleteAction = menu.addAction("Delete Task");
 
     if (menu.exec(event->globalPos()) == deleteAction) {

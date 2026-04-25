@@ -2,6 +2,7 @@
 
 #include <QFrame>
 #include <QPoint>
+#include "theme.h"
 
 class QLabel;
 class QMouseEvent;
@@ -23,7 +24,7 @@ class CardWidget : public QFrame
 
 public:
     CardWidget(const QString &title, int projectIdx, int colIdx, int taskIdx,
-               QWidget *parent = nullptr);
+               const Theme &theme, QWidget *parent = nullptr);
 
 signals:
     /** Emitted when the user confirms deletion via context menu. */
@@ -41,4 +42,5 @@ private:
 
     QLabel  *m_label        = nullptr;
     QPoint   m_dragStartPos;
+    Theme    m_theme;
 };

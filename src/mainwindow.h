@@ -2,8 +2,11 @@
 
 #include <QMainWindow>
 #include "model/appstate.h"
+#include "theme.h"
 
+class QLabel;
 class QListWidget;
+class QPushButton;
 class QSplitter;
 class BoardView;
 
@@ -24,10 +27,12 @@ public:
 private slots:
     void onProjectSelectionChanged(int row);
     void showProjectContextMenu(const QPoint &pos);
+    void toggleTheme();
 
 private:
     void setupUI();
     void refreshProjectList(int selectRow = -1);
+    void applyTheme();
 
     void addProjectDialog();
     void renameProjectDialog();
@@ -37,8 +42,12 @@ private:
     static QString boardsDirectory();
 
     AppState m_state;
+    Theme    m_theme = Theme::light();
 
     QSplitter   *m_splitter     = nullptr;
+    QWidget     *m_sidePanel    = nullptr;
+    QLabel      *m_sideTitle    = nullptr;
+    QPushButton *m_toggleBtn    = nullptr;
     QListWidget *m_projectList  = nullptr;
     BoardView   *m_board        = nullptr;
 };

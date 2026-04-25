@@ -70,15 +70,17 @@ private:
 
 // ─── ColumnWidget ─────────────────────────────────────────────────────────────
 
-ColumnWidget::ColumnWidget(AppState &state, int projectIdx, int colIdx, QWidget *parent)
+ColumnWidget::ColumnWidget(AppState &state, int projectIdx, int colIdx,
+                           const Theme &theme, QWidget *parent)
     : QWidget(parent)
     , m_state(state)
     , m_projectIdx(projectIdx)
     , m_colIdx(colIdx)
+    , m_theme(theme)
 {
     setFixedWidth(240);
     setAcceptDrops(true);
-    setStyleSheet("QWidget#column { background: #e8e8e8; border-radius: 8px; }");
+    setStyleSheet(theme.columnStyle);
     setObjectName("column");
 
     auto *outerLayout = new QVBoxLayout(this);
@@ -88,17 +90,14 @@ ColumnWidget::ColumnWidget(AppState &state, int projectIdx, int colIdx, QWidget 
     // ── Header (drag handle for column reordering) ────────────────────────────
     const QString &name = m_state.project(projectIdx).columns[colIdx].name;
     m_headerLabel = new ColumnHeader(name, colIdx, this);
-    m_headerLabel->setStyleSheet(
-        "font-weight: bold; font-size: 14px; background: transparent; border: none; padding: 2px;");
+    m_headerLabel->setStyleSheet(theme.columnHeaderStyle);
     m_headerLabel->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_headerLabel, &QLabel::customContextMenuRequested,
             this, &ColumnWidget::showHeaderContextMenu);
 
     // ── Add Task button ───────────────────────────────────────────────────────
     auto *addBtn = new QPushButton("+ Add Task");
-    addBtn->setStyleSheet(
-        "QPushButton { text-align: left; background: transparent; border: none; color: #555; padding: 2px; }"
-        "QPushButton:hover { color: #000; }");
+    addBtn->setStyleSheet(theme.addTaskBtnStyle);
     connect(addBtn, &QPushButton::clicked, this, &ColumnWidget::addTaskDialog);
 
     // Forward drag events from the button so drops on it reach this column
@@ -132,7 +131,7 @@ void ColumnWidget::buildCards()
 
     const auto &tasks = m_state.project(m_projectIdx).columns[m_colIdx].tasks;
     for (int i = 0; i < tasks.size(); ++i) {
-        auto *card = new CardWidget(tasks[i].title, m_projectIdx, m_colIdx, i);
+        auto *card = new CardWidget(tasks[i].title, m_projectIdx, m_colIdx, i, m_theme);
         connect(card, &CardWidget::deleteRequested,
                 this, [this](int colIdx, int taskIdx) {
                     emit taskDeleted(colIdx, taskIdx);
@@ -163,10 +162,7 @@ void ColumnWidget::showHeaderContextMenu(const QPoint &pos)
     const auto &cols = m_state.project(m_projectIdx).columns;
 
     QMenu menu(this);
-    menu.setStyleSheet(
-        "QMenu { background: #ffffff; color: #111111; border: 1px solid #cccccc; }"
-        "QMenu::item:selected { background: #0078d4; color: #ffffff; }"
-        "QMenu::separator { height: 1px; background: #cccccc; margin: 4px 8px; }");
+    menu.setStyleSheet(m_theme.menuStyle);
     QAction *renameAction    = menu.addAction("Rename Column");
     QAction *moveLeftAction  = menu.addAction("Move Left");
     QAction *moveRightAction = menu.addAction("Move Right");

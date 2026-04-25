@@ -21,8 +21,9 @@ BoardView::BoardView(AppState &state, QWidget *parent)
     scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setFrameShape(QFrame::NoFrame);
 
-    auto *container = new QWidget();
-    container->setStyleSheet("background: #d4d4d4;");
+    m_container = new QWidget();
+    m_container->setStyleSheet(m_theme.boardBg);
+    auto *container = m_container;
 
     m_columnsLayout = new QHBoxLayout(container);
     m_columnsLayout->setSpacing(12);
@@ -34,12 +35,7 @@ BoardView::BoardView(AppState &state, QWidget *parent)
     // deleted, so we give it the container as parent to keep it alive.
     m_addColumnBtn = new QPushButton("+ Add Column", container);
     m_addColumnBtn->setFixedWidth(160);
-    m_addColumnBtn->setStyleSheet(
-        "QPushButton {"
-        "  color: #666; border: 2px dashed #aaa; border-radius: 8px; padding: 10px;"
-        "  background: transparent;"
-        "}"
-        "QPushButton:hover { color: #333; border-color: #777; }");
+    m_addColumnBtn->setStyleSheet(m_theme.addColumnBtnStyle);
     connect(m_addColumnBtn, &QPushButton::clicked, this, &BoardView::onAddColumnClicked);
 
     scroll->setWidget(container);
@@ -57,6 +53,14 @@ void BoardView::loadProject(int projectIdx)
 void BoardView::clear()
 {
     m_projectIdx = -1;
+    refresh();
+}
+
+void BoardView::applyTheme(const Theme &theme)
+{
+    m_theme = theme;
+    m_container->setStyleSheet(theme.boardBg);
+    m_addColumnBtn->setStyleSheet(theme.addColumnBtnStyle);
     refresh();
 }
 
@@ -78,7 +82,7 @@ void BoardView::refresh()
         const Project &proj = m_state.project(m_projectIdx);
 
         for (int i = 0; i < proj.columns.size(); ++i) {
-            auto *col = new ColumnWidget(m_state, m_projectIdx, i);
+            auto *col = new ColumnWidget(m_state, m_projectIdx, i, m_theme);
 
             // Column-level operations — model is updated, then board is rebuilt.
             // refresh() is called directly (not deferred) so the new column

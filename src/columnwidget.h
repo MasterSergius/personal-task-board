@@ -3,6 +3,7 @@
 #include <QPoint>
 #include <QWidget>
 #include "model/appstate.h"
+#include "theme.h"
 
 class QLabel;
 class QVBoxLayout;
@@ -22,7 +23,8 @@ class ColumnWidget : public QWidget
     Q_OBJECT
 
 public:
-    ColumnWidget(AppState &state, int projectIdx, int colIdx, QWidget *parent = nullptr);
+    ColumnWidget(AppState &state, int projectIdx, int colIdx,
+                 const Theme &theme, QWidget *parent = nullptr);
 
 signals:
     void renameRequested(int colIdx, const QString &newName);
@@ -52,6 +54,7 @@ private:
     AppState &m_state;
     int m_projectIdx;
     int m_colIdx;
+    Theme m_theme;
 
     QLabel      *m_headerLabel = nullptr;
     QVBoxLayout *m_cardsLayout = nullptr;

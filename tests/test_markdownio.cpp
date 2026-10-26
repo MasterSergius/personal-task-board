@@ -126,7 +126,7 @@ private slots:
 
     // ── Format ────────────────────────────────────────────────────────────────
 
-    void parse_checkedTasks_areLoadedLikeUnchecked()
+    void parse_checkedTasks_keepDoneState()
     {
         QTemporaryDir dir;
         QVERIFY(dir.isValid());
@@ -134,14 +134,31 @@ private slots:
         // Write a raw file with both checked and unchecked tasks
         QFile f(dir.path() + "/Mix.md");
         QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
-        f.write("## Col\n\n- [ ] Pending\n- [x] Completed\n");
+        f.write("## Col\n\n- [ ] Pending\n- [x] Completed\n- [X] Upper\n");
         f.close();
 
         const auto projects = MarkdownIO::loadAll(dir.path());
         QCOMPARE(projects.size(), 1);
-        QCOMPARE(projects[0].columns[0].tasks.size(), 2);
-        QCOMPARE(projects[0].columns[0].tasks[0].title, QString("Pending"));
-        QCOMPARE(projects[0].columns[0].tasks[1].title, QString("Completed"));
+        const auto &tasks = projects[0].columns[0].tasks;
+        QCOMPARE(tasks.size(), 3);
+        QCOMPARE(tasks[0].title, QString("Pending"));
+        QCOMPARE(tasks[0].done,  false);
+        QCOMPARE(tasks[1].title, QString("Completed"));
+        QCOMPARE(tasks[1].done,  true);
+        QCOMPARE(tasks[2].title, QString("Upper"));
+        QCOMPARE(tasks[2].done,  true);
+    }
+
+    void save_preservesDoneState()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+
+        MarkdownIO::save(dir.path(), Project{"B", {Column{"C", {Task{"open"}, Task{"closed", true}}}}});
+
+        const auto projects = MarkdownIO::loadAll(dir.path());
+        QCOMPARE(projects[0].columns[0].tasks[0].done, false);
+        QCOMPARE(projects[0].columns[0].tasks[1].done, true);
     }
 
     void parse_linesWithoutPrefix_areIgnored()
@@ -159,6 +176,136 @@ private slots:
         QCOMPARE(projects[0].columns[0].name,            QString("Real Column"));
         QCOMPARE(projects[0].columns[0].tasks.size(),    1);
         QCOMPARE(projects[0].columns[0].tasks[0].title,  QString("Task"));
+    }
+
+    void parse_taskLinesBeforeFirstColumn_areNotTasks()
+    {
+        const Project p = MarkdownIO::parse("- [ ] orphan\n\n## Col\n- [ ] real\n", "P");
+        QCOMPARE(p.columns.size(), 1);
+        QCOMPARE(p.columns[0].tasks.size(), 1);
+        QCOMPARE(p.columns[0].tasks[0].title, QString("real"));
+    }
+
+    void parse_malformedCheckboxes_areIgnored()
+    {
+        const Project p = MarkdownIO::parse("## Col\n- [y] no\n- [] no\n- [ ]no\n- [ ] yes\n", "P");
+        QCOMPARE(p.columns[0].tasks.size(), 1);
+        QCOMPARE(p.columns[0].tasks[0].title, QString("yes"));
+    }
+
+    void parse_crlfLineEndings()
+    {
+        const Project p = MarkdownIO::parse("## To Do\r\n\r\n- [ ] A\r\n- [x] B\r\n", "P");
+        QCOMPARE(p.columns.size(), 1);
+        QCOMPARE(p.columns[0].name, QString("To Do"));
+        QCOMPARE(p.columns[0].tasks.size(), 2);
+        QCOMPARE(p.columns[0].tasks[1].title, QString("B"));
+        QCOMPARE(p.columns[0].tasks[1].done,  true);
+    }
+
+    void loadAll_utf8WithBom()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+
+        QFile f(dir.path() + "/Bom.md");
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("\xEF\xBB\xBF## Привет\n\n- [ ] Задача\n");
+        f.close();
+
+        const auto projects = MarkdownIO::loadAll(dir.path());
+        QCOMPARE(projects[0].columns.size(), 1);
+        QCOMPARE(projects[0].columns[0].name,           QString("Привет"));
+        QCOMPARE(projects[0].columns[0].tasks[0].title, QString("Задача"));
+    }
+
+    // ── Serialisation ─────────────────────────────────────────────────────────
+
+    void serialize_defaultFormatIsUnchanged()
+    {
+        const Project p{"P", {Column{"To Do", {Task{"A"}, Task{"B", true}}}, Column{"Done", {}}}};
+        QCOMPARE(MarkdownIO::serialize(p),
+                 QString("## To Do\n\n- [ ] A\n- [x] B\n\n## Done\n\n"));
+    }
+
+    void obsidianBoard_roundTripPreservesExtras()
+    {
+        const QString original =
+            "---\n\nkanban-plugin: board\n\n---\n\n"
+            "## Todo\n\n- [ ] One\n\n"
+            "## Done\n\n- [x] Two\n\n"
+            "***\n\n## Archive\n\n- [x] Old\n\n"
+            "%% kanban:settings\n```\n{\"kanban-plugin\":\"board\"}\n```\n%%\n";
+
+        const Project p = MarkdownIO::parse(original, "Obs");
+        QCOMPARE(p.columns.size(), 2);     // "Archive" belongs to the footer
+        QCOMPARE(p.columns[1].name, QString("Done"));
+        QVERIFY(p.header.contains("kanban-plugin: board"));
+        QVERIFY(p.footer.startsWith("***"));
+        QVERIFY(p.footer.contains("%% kanban:settings"));
+
+        // Saving must not drop the front matter, archive or settings block
+        const QString saved = MarkdownIO::serialize(p);
+        QCOMPARE(saved, original);
+    }
+
+    // ── Filenames ─────────────────────────────────────────────────────────────
+
+    void loadAll_nameWithDots_keepsFullName()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+
+        MarkdownIO::save(dir.path(), Project{"v1.2 release.plan", {}});
+
+        const auto projects = MarkdownIO::loadAll(dir.path());
+        QCOMPARE(projects.size(), 1);
+        QCOMPARE(projects[0].name, QString("v1.2 release.plan"));
+    }
+
+    void save_createsMissingDirectory()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString sub = dir.path() + "/a/b";
+
+        QVERIFY(MarkdownIO::save(sub, Project{"P", {}}));
+        QCOMPARE(MarkdownIO::loadAll(sub).size(), 1);
+    }
+
+    void save_unwritableLocation_returnsFalse()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+
+        // A regular file where the directory should be
+        QFile blocker(dir.path() + "/notadir");
+        QVERIFY(blocker.open(QIODevice::WriteOnly));
+        blocker.close();
+
+        QVERIFY(!MarkdownIO::save(dir.path() + "/notadir", Project{"P", {}}));
+    }
+
+    void rename_missingSource_succeeds()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        QVERIFY(MarkdownIO::rename(dir.path(), "Nope", "Other"));
+    }
+
+    void rename_existingTarget_failsAndKeepsBothFiles()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+
+        MarkdownIO::save(dir.path(), Project{"A", {Column{"FromA", {}}}});
+        MarkdownIO::save(dir.path(), Project{"B", {Column{"FromB", {}}}});
+
+        QVERIFY(!MarkdownIO::rename(dir.path(), "A", "B"));
+
+        const auto projects = MarkdownIO::loadAll(dir.path());
+        QCOMPARE(projects.size(), 2);
+        QCOMPARE(projects[1].columns[0].name, QString("FromB"));
     }
 };
 

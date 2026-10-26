@@ -1,3 +1,5 @@
+#include <QDir>
+#include <QFile>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -283,6 +285,208 @@ private slots:
         AppState s2(dir.path());
         s2.load();
         QCOMPARE(s2.projectCount(), 0);
+    }
+
+    // ── Project names ─────────────────────────────────────────────────────────
+
+    void isValidProjectName_data()
+    {
+        QTest::addColumn<QString>("name");
+        QTest::addColumn<bool>("valid");
+
+        QTest::newRow("plain")        << QString("Work")           << true;
+        QTest::newRow("spaces")       << QString("Side project")   << true;
+        QTest::newRow("dots")         << QString("v1.2 plan")      << true;
+        QTest::newRow("unicode")      << QString("Проект ✓")       << true;
+        QTest::newRow("empty")        << QString("")               << false;
+        QTest::newRow("padded")       << QString(" Work ")         << false;
+        QTest::newRow("slash")        << QString("a/b")            << false;
+        QTest::newRow("traversal")    << QString("../escape")      << false;
+        QTest::newRow("backslash")    << QString("a\\b")           << false;
+        QTest::newRow("hidden")       << QString(".hidden")        << false;
+        QTest::newRow("dotdot")       << QString("..")             << false;
+        QTest::newRow("colon")        << QString("a:b")            << false;
+        QTest::newRow("wildcard")     << QString("a*")             << false;
+        QTest::newRow("newline")      << QString("a\nb")           << false;
+    }
+
+    void isValidProjectName()
+    {
+        QFETCH(QString, name);
+        QFETCH(bool, valid);
+        QCOMPARE(AppState::isValidProjectName(name), valid);
+    }
+
+    void addProject_invalidName_isRejectedAndNothingWritten()
+    {
+        auto [s, dir] = makeState();
+
+        QCOMPARE(s.addProject("../escape"), -1);
+        QCOMPARE(s.addProject(".hidden"), -1);
+        QCOMPARE(s.projectCount(), 0);
+        QVERIFY(!QFile::exists(dir.path() + "/../escape.md"));
+        QVERIFY(QDir(dir.path()).entryList(QDir::Files | QDir::Hidden).isEmpty());
+    }
+
+    void addProject_duplicateDifferingOnlyInCase_isRejected()
+    {
+        auto [s, dir] = makeState();
+
+        s.addProject("Work");
+        QCOMPARE(s.addProject("work"), -1);
+        QCOMPARE(s.projectCount(), 1);
+    }
+
+    void addProject_nameWithDots_survivesReload()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        {
+            AppState s(dir.path());
+            s.load();
+            s.addProject("v1.2 plan");
+        }
+        AppState s2(dir.path());
+        s2.load();
+        QCOMPARE(s2.projectNames(), QStringList({"v1.2 plan"}));
+    }
+
+    void renameProject_invalidName_returnsFalse()
+    {
+        auto [s, dir] = makeState();
+
+        s.addProject("A");
+        QVERIFY(!s.renameProject(0, "x/y"));
+        QCOMPARE(s.project(0).name, QString("A"));
+    }
+
+    void renameProject_caseOnlyChange_isAllowed()
+    {
+        auto [s, dir] = makeState();
+
+        s.addProject("work");
+        QVERIFY(s.renameProject(0, "Work"));
+        QCOMPARE(s.project(0).name, QString("Work"));
+
+        AppState s2(dir.path());
+        s2.load();
+        QCOMPARE(s2.projectNames(), QStringList({"Work"}));
+    }
+
+    void renameProject_targetFileExistsOnDisk_failsWithoutChanges()
+    {
+        auto [s, dir] = makeState();
+
+        s.addProject("A");
+        s.addColumn(0, "Mine");
+
+        // A board created outside the app after load()
+        QFile f(dir.path() + "/B.md");
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("## Theirs\n");
+        f.close();
+
+        QVERIFY(!s.renameProject(0, "B"));
+        QCOMPARE(s.project(0).name, QString("A"));
+
+        AppState s2(dir.path());
+        s2.load();
+        QCOMPARE(s2.projectNames(), QStringList({"A", "B"}));
+        QCOMPARE(s2.project(1).columns[0].name, QString("Theirs"));
+    }
+
+    void renameProject_missingFile_isRecreated()
+    {
+        auto [s, dir] = makeState();
+
+        s.addProject("A");
+        s.addColumn(0, "Col");
+        QVERIFY(QFile::remove(dir.path() + "/A.md"));
+
+        QVERIFY(s.renameProject(0, "B"));
+
+        AppState s2(dir.path());
+        s2.load();
+        QCOMPARE(s2.projectNames(), QStringList({"B"}));
+        QCOMPARE(s2.project(0).columns[0].name, QString("Col"));
+    }
+
+    // ── Robustness ────────────────────────────────────────────────────────────
+
+    void outOfRangeIndices_areIgnored()
+    {
+        auto [s, dir] = makeState();
+
+        s.addProject("P");
+        s.addColumn(0, "A");
+        s.addColumn(0, "B");
+        s.addTask(0, 0, "T");
+
+        // None of these may crash or change anything
+        s.removeProject(5);
+        s.removeProject(-1);
+        QVERIFY(!s.renameProject(3, "X"));
+        s.addColumn(2, "X");
+        s.removeColumn(0, 7);
+        s.renameColumn(0, -1, "X");
+        s.moveColumn(0, 0, 9);
+        s.moveColumn(0, -1, 0);
+        s.addTask(0, 4, "X");
+        s.removeTask(0, 0, 3);
+        s.removeTask(0, 3, 0);
+        s.moveTask(0, 0, 9, 1);
+        s.moveTask(0, 0, 0, 9);
+        s.moveTask(0, 9, 0, 1);
+
+        QCOMPARE(s.projectCount(), 1);
+        QCOMPARE(s.project(0).columns.size(), 2);
+        QCOMPARE(s.project(0).columns[0].name, QString("A"));
+        QCOMPARE(s.project(0).columns[0].tasks.size(), 1);
+        QCOMPARE(s.project(0).columns[1].tasks.size(), 0);
+    }
+
+    void moveTask_preservesDoneState()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+
+        QFile f(dir.path() + "/P.md");
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("## Todo\n\n- [x] Finished\n\n## Done\n");
+        f.close();
+
+        {
+            AppState s(dir.path());
+            s.load();
+            s.moveTask(0, 0, 0, 1);
+            QCOMPARE(s.project(0).columns[1].tasks[0].done, true);
+        }
+
+        AppState s2(dir.path());
+        s2.load();
+        QCOMPARE(s2.project(0).columns[1].tasks[0].title, QString("Finished"));
+        QCOMPARE(s2.project(0).columns[1].tasks[0].done,  true);
+    }
+
+    void mutations_keepObsidianFrontMatter()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+
+        QFile f(dir.path() + "/Obs.md");
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("---\nkanban-plugin: board\n---\n\n## Todo\n\n- [ ] A\n\n%% kanban:settings\n%%\n");
+        f.close();
+
+        AppState s(dir.path());
+        s.load();
+        s.addTask(0, 0, "B");
+
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QString saved = QString::fromUtf8(f.readAll());
+        QVERIFY(saved.startsWith("---\nkanban-plugin: board\n---\n"));
+        QVERIFY(saved.contains("- [ ] B\n"));
+        QVERIFY(saved.trimmed().endsWith("%% kanban:settings\n%%"));
     }
 };
 

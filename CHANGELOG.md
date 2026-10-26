@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Possible use-after-free when dropping a card or column: the board was rebuilt (deleting the dragged widget and its `QDrag`) while `QDrag::exec()` was still running. The drag source now requests the move after `exec()` returns
+- Plain text dragged in from other applications (e.g. `"3:7"`) was treated as a task move and could index out of range; drags now use private MIME types and are accepted only from this application
+- Completed tasks (`- [x]`) were rewritten as `- [ ]` on the next save; `- [X]` was not recognised at all
+- Saving an Obsidian Kanban board dropped its front matter, archive section and settings block
+- Project names containing dots were truncated on reload (`v1.2 plan` → `v1`)
+- Project names containing `/`, `..` or a leading `.` could write outside the boards directory or create hidden files that were never loaded again; such names are now rejected
+- Projects whose names differ only in case could overwrite each other's file on case-insensitive file systems
+- Renaming a project ignored file-system errors, leaving the old file behind
+- UTF-8 BOM at the start of a board file hid the first column
+
+### Changed
+- Board files are written atomically via `QSaveFile`
+- `AppState` mutators ignore out-of-range indices instead of invoking undefined behaviour
+- `MarkdownIO::save/remove/rename` return `bool`; added `MarkdownIO::parse/serialize`
+
+### Added
+- Regression tests for all of the above, plus a headless `ColumnWidget` drag-and-drop test
+
 ## [0.4.0] — 2026-04-15
 
 ### Added

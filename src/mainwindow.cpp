@@ -171,21 +171,38 @@ void MainWindow::showProjectContextMenu(const QPoint &pos)
 
 // ─── Dialogs ──────────────────────────────────────────────────────────────────
 
+// Shows a warning and returns false if name can't be used for a project.
+static bool checkProjectName(QWidget *parent, const QString &title,
+                             const AppState &state, const QString &name, int exceptIdx)
+{
+    if (!AppState::isValidProjectName(name)) {
+        QMessageBox::warning(parent, title,
+            QString("\"%1\" is not a valid project name.\n"
+                    "Names may not start with '.' or contain any of: / \\ : * ? \" < > |")
+                .arg(name));
+        return false;
+    }
+    if (state.projectNameTaken(name, exceptIdx)) {
+        QMessageBox::warning(parent, title,
+            QString("A project named \"%1\" already exists.").arg(name));
+        return false;
+    }
+    return true;
+}
+
 void MainWindow::addProjectDialog()
 {
     bool ok;
     QString name = QInputDialog::getText(
         this, "Add Project", "Project name:", QLineEdit::Normal, "", &ok);
 
-    if (!ok || name.trimmed().isEmpty())
+    name = name.trimmed();
+    if (!ok || name.isEmpty() || !checkProjectName(this, "Add Project", m_state, name, -1))
         return;
 
-    int idx = m_state.addProject(name.trimmed());
-    if (idx < 0) {
-        QMessageBox::warning(this, "Add Project",
-            QString("A project named \"%1\" already exists.").arg(name.trimmed()));
+    int idx = m_state.addProject(name);
+    if (idx < 0)
         return;
-    }
 
     // New projects get default columns so the board isn't blank
     m_state.addColumn(idx, "To Do");
@@ -207,12 +224,14 @@ void MainWindow::renameProjectDialog()
         this, "Rename Project", "New name:",
         QLineEdit::Normal, oldName, &ok);
 
-    if (!ok || newName.trimmed().isEmpty() || newName.trimmed() == oldName)
+    newName = newName.trimmed();
+    if (!ok || newName.isEmpty() || newName == oldName
+        || !checkProjectName(this, "Rename Project", m_state, newName, row))
         return;
 
-    if (!m_state.renameProject(row, newName.trimmed())) {
+    if (!m_state.renameProject(row, newName)) {
         QMessageBox::warning(this, "Rename Project",
-            QString("A project named \"%1\" already exists.").arg(newName.trimmed()));
+            QString("Could not rename the board file to \"%1.md\".").arg(newName));
         return;
     }
 

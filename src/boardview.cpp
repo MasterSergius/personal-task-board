@@ -85,8 +85,9 @@ void BoardView::refresh()
             auto *col = new ColumnWidget(m_state, m_projectIdx, i, m_theme);
 
             // Column-level operations — model is updated, then board is rebuilt.
-            // refresh() is called directly (not deferred) so the new column
-            // widgets are in place before drag->exec() returns to the card.
+            // These signals are never emitted from inside a drag's nested event
+            // loop (sources emit after QDrag::exec() returns), so the
+            // deleteLater() calls in refresh() are safe.
             connect(col, &ColumnWidget::renameRequested,
                     this, [this](int colIdx, const QString &name) {
                         m_state.renameColumn(m_projectIdx, colIdx, name);

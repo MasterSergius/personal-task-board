@@ -10,6 +10,7 @@
 
 struct Task {
     QString title;
+    bool    done = false;   // "- [x]" in Markdown; preserved on save
 };
 
 struct Column {
@@ -20,4 +21,10 @@ struct Column {
 struct Project {
     QString name;
     QList<Column> columns;
+
+    // Content the board UI does not edit, kept verbatim so that saving does
+    // not destroy it (e.g. Obsidian Kanban's YAML front matter, its
+    // "%% kanban:settings" block and the "***" archive section).
+    QString header;   // everything before the first "## " heading
+    QString footer;   // everything from the first "***" or "%%" line onward
 };

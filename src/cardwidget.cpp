@@ -46,28 +46,37 @@ void CardWidget::mouseMoveEvent(QMouseEvent *event)
     if ((event->pos() - m_dragStartPos).manhattanLength() < QApplication::startDragDistance())
         return;
 
+    const QPoint hotSpot = m_dragStartPos;
+    m_dragStartPos = QPoint();
+    m_dropColIdx   = -1;
+
     auto *drag     = new QDrag(this);
     auto *mimeData = new QMimeData();
 
-    // Encode source position as "colIdx:taskIdx" so the drop target can update the model
-    mimeData->setText(QString("%1:%2").arg(m_colIdx).arg(m_taskIdx));
+    // Private MIME type: the drop target only accepts drags from this app.
+    // Indices travel via the source widget, not the payload.
+    mimeData->setData(MimeType, QByteArray());
     drag->setMimeData(mimeData);
 
     // Snapshot the card as the drag cursor image
     drag->setPixmap(grab());
-    drag->setHotSpot(m_dragStartPos);
+    drag->setHotSpot(hotSpot);
 
-    // Hide original while dragging; it will be rebuilt by BoardView::refresh()
+    // Hide original while dragging
     hide();
 
-    Qt::DropAction result = drag->exec(Qt::MoveAction);
+    const Qt::DropAction result = drag->exec(Qt::MoveAction);
 
-    // If the drop was cancelled the board is NOT refreshed, so we must reappear
-    if (result != Qt::MoveAction)
-        show();
-    // On success: BoardView::refresh() (called synchronously from the drop slot) recreates all cards
+    // The model update happens here, after exec() has returned, rather than in
+    // the target's dropEvent(): rebuilding the board deletes this card, and
+    // doing that while still inside the drag's nested event loop would leave
+    // exec() running on a destroyed QDrag.
+    if (result == Qt::MoveAction && m_dropColIdx >= 0 && m_dropColIdx != m_colIdx) {
+        emit moveRequested(m_colIdx, m_taskIdx, m_dropColIdx);   // board rebuild follows
+        return;
+    }
 
-    m_dragStartPos = QPoint();
+    show();
 }
 
 // ─── Context menu ─────────────────────────────────────────────────────────────

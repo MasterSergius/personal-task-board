@@ -19,18 +19,27 @@
 // ─── ColumnHeader ─────────────────────────────────────────────────────────────
 //
 // A QLabel subclass that initiates a column-reorder drag when the user
-// clicks and drags. The MIME text is "ptb-column:<colIdx>".
+// clicks and drags. Uses the private MIME type ColumnHeader::MimeType.
 
 class ColumnHeader : public QLabel
 {
     Q_OBJECT
 
 public:
+    static constexpr const char *MimeType = "application/x-ptb-column";
+
     ColumnHeader(const QString &text, int colIdx, QWidget *parent = nullptr)
         : QLabel(text, parent), m_colIdx(colIdx)
     {
         setCursor(Qt::SizeHorCursor);
     }
+
+    /** Called by the drop target while the drag is in progress. */
+    void setDropColumn(int colIdx) { m_dropColIdx = colIdx; }
+
+signals:
+    /** Emitted after QDrag::exec() returns from a successful drop. */
+    void moveRequested(int fromColIdx, int toColIdx);
 
 protected:
     void mousePressEvent(QMouseEvent *event) override
@@ -48,20 +57,26 @@ protected:
             return;
 
         // Reset before exec() to prevent re-entrancy
+        const QPoint hotSpot = m_dragStartPos;
         m_dragStartPos = QPoint();
+        m_dropColIdx   = -1;
 
         auto *drag = new QDrag(this);
         auto *mime = new QMimeData();
-        mime->setText(QString("ptb-column:%1").arg(m_colIdx));
+        mime->setData(MimeType, QByteArray());
         drag->setMimeData(mime);
         drag->setPixmap(grab());
-        drag->setHotSpot(event->pos());
-        drag->exec(Qt::MoveAction);
-        // The drop target (ColumnWidget) emits columnMoveRequested; nothing to do here.
+        drag->setHotSpot(hotSpot);
+
+        // Emit only after exec() returns — see CardWidget::mouseMoveEvent.
+        if (drag->exec(Qt::MoveAction) == Qt::MoveAction
+            && m_dropColIdx >= 0 && m_dropColIdx != m_colIdx)
+            emit moveRequested(m_colIdx, m_dropColIdx);
     }
 
 private:
     int    m_colIdx;
+    int    m_dropColIdx = -1;
     QPoint m_dragStartPos;
 };
 
@@ -94,6 +109,8 @@ ColumnWidget::ColumnWidget(AppState &state, int projectIdx, int colIdx,
     m_headerLabel->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_headerLabel, &QLabel::customContextMenuRequested,
             this, &ColumnWidget::showHeaderContextMenu);
+    connect(static_cast<ColumnHeader *>(m_headerLabel), &ColumnHeader::moveRequested,
+            this, &ColumnWidget::columnMoveRequested);
 
     // ── Add Task button ───────────────────────────────────────────────────────
     auto *addBtn = new QPushButton("+ Add Task");
@@ -136,6 +153,7 @@ void ColumnWidget::buildCards()
                 this, [this](int colIdx, int taskIdx) {
                     emit taskDeleted(colIdx, taskIdx);
                 });
+        connect(card, &CardWidget::moveRequested, this, &ColumnWidget::taskMoved);
         m_cardsLayout->addWidget(card);
     }
 }
@@ -214,41 +232,30 @@ void ColumnWidget::addTaskDialog()
 
 void ColumnWidget::dragEnterEvent(QDragEnterEvent *event)
 {
-    if (event->mimeData()->hasText())
+    // Only accept drags started by this application's cards / column headers.
+    // event->source() is null for drags coming from other applications.
+    const QMimeData *mime = event->mimeData();
+    if ((mime->hasFormat(CardWidget::MimeType)   && qobject_cast<CardWidget *>(event->source()))
+     || (mime->hasFormat(ColumnHeader::MimeType) && qobject_cast<ColumnHeader *>(event->source())))
         event->acceptProposedAction();
 }
 
 void ColumnWidget::dropEvent(QDropEvent *event)
 {
-    const QString text = event->mimeData()->text();
+    // Only record the target here. The source emits the move request once
+    // QDrag::exec() has returned, so the board is not rebuilt (and the source
+    // widget deleted) while the drag is still running.
 
-    // ── Column reorder drag ───────────────────────────────────────────────────
-    if (text.startsWith("ptb-column:")) {
-        bool ok;
-        int fromColIdx = text.mid(11).toInt(&ok);
-        if (ok && fromColIdx != m_colIdx) {
-            event->acceptProposedAction();
-            emit columnMoveRequested(fromColIdx, m_colIdx);
-        }
+    if (auto *header = qobject_cast<ColumnHeader *>(event->source());
+        header && event->mimeData()->hasFormat(ColumnHeader::MimeType)) {
+        header->setDropColumn(m_colIdx);
+        event->acceptProposedAction();
         return;
     }
 
-    // ── Task drag: "fromColIdx:taskIdx" ───────────────────────────────────────
-    const QStringList parts = text.split(':');
-    if (parts.size() != 2)
-        return;
-
-    bool ok1, ok2;
-    int fromColIdx = parts[0].toInt(&ok1);
-    int taskIdx    = parts[1].toInt(&ok2);
-
-    if (!ok1 || !ok2)
-        return;
-
-    // Ignore same-column drops so the card's show() path restores it correctly
-    if (fromColIdx == m_colIdx)
-        return;
-
-    event->acceptProposedAction();
-    emit taskMoved(fromColIdx, taskIdx, m_colIdx);
+    if (auto *card = qobject_cast<CardWidget *>(event->source());
+        card && event->mimeData()->hasFormat(CardWidget::MimeType)) {
+        card->setDropColumn(m_colIdx);
+        event->acceptProposedAction();
+    }
 }

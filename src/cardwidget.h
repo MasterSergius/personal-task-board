@@ -12,7 +12,7 @@ class QContextMenuEvent;
  * A single task card on the Kanban board.
  *
  * Supports:
- *  - Drag to move between columns (MIME text = "colIdx:taskIdx")
+ *  - Drag to move between columns (MIME type CardWidget::MimeType)
  *  - Right-click context menu to delete the task
  *
  * The card carries its own position indices so the drop target can update
@@ -26,9 +26,20 @@ public:
     CardWidget(const QString &title, int projectIdx, int colIdx, int taskIdx,
                const Theme &theme, QWidget *parent = nullptr);
 
+    static constexpr const char *MimeType = "application/x-ptb-task";
+
+    /** Called by the drop target while the drag is in progress. */
+    void setDropColumn(int colIdx) { m_dropColIdx = colIdx; }
+
 signals:
     /** Emitted when the user confirms deletion via context menu. */
     void deleteRequested(int colIdx, int taskIdx);
+
+    /**
+     * Emitted after a successful drop on another column. Sent only once
+     * QDrag::exec() has returned, so receivers may safely rebuild the board.
+     */
+    void moveRequested(int fromColIdx, int taskIdx, int toColIdx);
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
@@ -39,6 +50,7 @@ private:
     int m_projectIdx;
     int m_colIdx;
     int m_taskIdx;
+    int m_dropColIdx = -1;
 
     QLabel  *m_label        = nullptr;
     QPoint   m_dragStartPos;

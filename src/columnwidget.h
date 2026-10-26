@@ -14,7 +14,8 @@ class QDropEvent;
  * Displays one Kanban column: a header, an "Add Task" button, and a list of cards.
  *
  * The header (ColumnHeader) can be dragged to reorder columns.
- * Task cards can be dropped anywhere on the column.
+ * Task cards can be dropped anywhere on the column. Only drags originating
+ * from this application are accepted.
  *
  * Communicates upward exclusively through signals — no pointer to BoardView.
  */

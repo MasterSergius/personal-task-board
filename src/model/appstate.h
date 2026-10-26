@@ -11,8 +11,8 @@
  * Owns all project/column/task data and coordinates persistence.
  * Every mutating method saves the affected project to disk automatically.
  *
- * Index parameters are always zero-based and assumed to be in range;
- * callers (UI layer) are responsible for bounds-checking before calling.
+ * Index parameters are zero-based. Mutators silently ignore out-of-range
+ * indices so a stale index from the UI can never corrupt memory.
  */
 class AppState
 {
@@ -29,8 +29,19 @@ public:
     QStringList projectNames() const;
 
     /**
+     * Whether name can be used as a project (and therefore file) name:
+     * non-empty, no surrounding whitespace, no leading '.', and none of the
+     * characters that are illegal in filenames on Windows/macOS/Linux.
+     */
+    static bool isValidProjectName(const QString &name);
+
+    /** Whether another project (other than exceptIdx) already uses name. Case-insensitive. */
+    bool projectNameTaken(const QString &name, int exceptIdx = -1) const;
+
+    /**
      * Add a new project with default empty column list.
-     * Returns the index of the new project, or -1 if the name already exists.
+     * Returns the index of the new project, or -1 if the name is invalid
+     * or already exists.
      */
     int addProject(const QString &name);
 
@@ -39,7 +50,8 @@ public:
 
     /**
      * Rename project at idx.
-     * Returns false if newName is already taken by another project.
+     * Returns false if newName is invalid, already taken by another project,
+     * or the file could not be renamed on disk.
      */
     bool renameProject(int idx, const QString &newName);
 
@@ -64,6 +76,9 @@ public:
 
 private:
     void save(int projectIdx) const;
+
+    bool validProject(int idx) const;
+    bool validColumn(int projectIdx, int colIdx) const;
 
     QString m_boardsDir;
     QList<Project> m_projects;

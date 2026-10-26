@@ -74,11 +74,22 @@ public:
     /** Move task from one column to another (appended at the end). */
     void moveTask(int projectIdx, int fromColIdx, int taskIdx, int toColIdx);
 
+    void setTaskPriority(int projectIdx, int colIdx, int taskIdx, Priority priority);
+
+    /**
+     * Set the task's frame color ("#rgb" or "#rrggbb"); an empty string resets
+     * it to the theme default. Returns false (no change) for an invalid color.
+     */
+    bool setTaskColor(int projectIdx, int colIdx, int taskIdx, const QString &color);
+
 private:
     void save(int projectIdx) const;
 
     bool validProject(int idx) const;
     bool validColumn(int projectIdx, int colIdx) const;
+
+    /** Returns the task, or nullptr if any index is out of range. */
+    Task *taskAt(int projectIdx, int colIdx, int taskIdx);
 
     QString m_boardsDir;
     QList<Project> m_projects;

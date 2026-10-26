@@ -3,6 +3,7 @@
 #include "types.h"
 #include <QString>
 #include <QList>
+#include <optional>
 
 /**
  * Reads and writes Kanban boards as Markdown files.
@@ -19,8 +20,9 @@
  *
  *   ## Another Column
  *
- *   - [ ] Another task
+ *   - [ ] Another task [priority:: high] [color:: #e5484d]
  *
+ * Task priority and frame color are stored as Dataview inline fields.
  * Anything before the first column heading (e.g. YAML front matter) and
  * everything from the first "***" or "%%" line onward (Obsidian's archive and
  * settings blocks) is preserved verbatim on save.
@@ -53,6 +55,17 @@ public:
      * Returns false if the rename fails (e.g. the target already exists).
      */
     static bool rename(const QString &dir, const QString &oldName, const QString &newName);
+
+    // ── Task metadata helpers ────────────────────────────────────────────────
+
+    /** "low" / "medium" / "high" / "urgent"; empty for Priority::None. */
+    static QString priorityName(Priority priority);
+
+    /** Inverse of priorityName() (case-insensitive); nullopt if unrecognised. */
+    static std::optional<Priority> priorityFromName(const QString &name);
+
+    /** "#RGB" / "#RRGGBB" → lowercase "#rrggbb"; empty if not a valid hex color. */
+    static QString normalizeColor(const QString &color);
 
 private:
     static QString filePath(const QString &dir, const QString &name);

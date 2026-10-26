@@ -19,7 +19,11 @@
 - `MarkdownIO::save/remove/rename` return `bool`; added `MarkdownIO::parse/serialize`
 
 ### Added
-- Regression tests for all of the above, plus a headless `ColumnWidget` drag-and-drop test
+- Regression tests for the fixes above, plus a headless `ColumnWidget` drag-and-drop test
+- Task priority (Urgent / High / Medium / Low), shown as a colored badge on the card
+- Custom task frame color: preset palette or any color via a color picker
+- Both are set from the card's right-click menu and stored as Dataview inline fields (`[priority:: high]`, `[color:: #e5484d]`)
+- Tests for parsing, serialisation, persistence and card rendering of the new fields
 
 ## [0.4.0] — 2026-04-15
 

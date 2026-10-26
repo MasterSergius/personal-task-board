@@ -37,6 +37,8 @@ signals:
     void taskAdded(int colIdx, const QString &title);
     void taskDeleted(int colIdx, int taskIdx);
     void taskMoved(int fromColIdx, int taskIdx, int toColIdx);
+    void taskPriorityChanged(int colIdx, int taskIdx, Priority priority);
+    void taskColorChanged(int colIdx, int taskIdx, const QString &color);
 
 protected:
     void dragEnterEvent(QDragEnterEvent *event) override;

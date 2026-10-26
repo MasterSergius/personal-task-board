@@ -130,6 +130,16 @@ void BoardView::refresh()
                         m_state.moveTask(m_projectIdx, fromColIdx, taskIdx, toColIdx);
                         refresh();
                     });
+            connect(col, &ColumnWidget::taskPriorityChanged,
+                    this, [this](int colIdx, int taskIdx, Priority priority) {
+                        m_state.setTaskPriority(m_projectIdx, colIdx, taskIdx, priority);
+                        refresh();
+                    });
+            connect(col, &ColumnWidget::taskColorChanged,
+                    this, [this](int colIdx, int taskIdx, const QString &color) {
+                        m_state.setTaskColor(m_projectIdx, colIdx, taskIdx, color);
+                        refresh();
+                    });
 
             m_columnsLayout->addWidget(col);
         }

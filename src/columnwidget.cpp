@@ -148,12 +148,16 @@ void ColumnWidget::buildCards()
 
     const auto &tasks = m_state.project(m_projectIdx).columns[m_colIdx].tasks;
     for (int i = 0; i < tasks.size(); ++i) {
-        auto *card = new CardWidget(tasks[i].title, m_projectIdx, m_colIdx, i, m_theme);
+        auto *card = new CardWidget(tasks[i], m_projectIdx, m_colIdx, i, m_theme);
         connect(card, &CardWidget::deleteRequested,
                 this, [this](int colIdx, int taskIdx) {
                     emit taskDeleted(colIdx, taskIdx);
                 });
         connect(card, &CardWidget::moveRequested, this, &ColumnWidget::taskMoved);
+        connect(card, &CardWidget::priorityChangeRequested,
+                this, &ColumnWidget::taskPriorityChanged);
+        connect(card, &CardWidget::colorChangeRequested,
+                this, &ColumnWidget::taskColorChanged);
         m_cardsLayout->addWidget(card);
     }
 }

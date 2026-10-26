@@ -1,5 +1,6 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QLabel>
 #include <QMimeData>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -8,6 +9,7 @@
 #include "cardwidget.h"
 #include "columnwidget.h"
 #include "model/appstate.h"
+#include "model/markdownio.h"
 
 // Drag-and-drop acceptance rules for ColumnWidget.
 //
@@ -108,6 +110,64 @@ private slots:
         QCOMPARE(moved[0][0].toInt(), 0);
         QCOMPARE(moved[0][1].toInt(), 0);
         QCOMPARE(moved[0][2].toInt(), 1);
+    }
+
+    // ── Priority / color presentation ────────────────────────────────────────
+
+    void card_showsPriorityBadgeOnlyWhenSet()
+    {
+        Task plain{"Plain"};
+        CardWidget a(plain, 0, 0, 0, Theme::light());
+        QVERIFY(!a.findChild<QLabel *>("priorityBadge"));
+
+        Task high{"Important"};
+        high.priority = Priority::High;
+        CardWidget b(high, 0, 0, 0, Theme::light());
+        auto *badge = b.findChild<QLabel *>("priorityBadge");
+        QVERIFY(badge);
+        QCOMPARE(badge->text(), QString("HIGH"));
+        QVERIFY(badge->styleSheet().contains(CardWidget::priorityColor(Priority::High)));
+    }
+
+    void card_usesFrameColorOnlyWhenSet()
+    {
+        Task plain{"Plain"};
+        CardWidget a(plain, 0, 0, 0, Theme::dark());
+        QCOMPARE(a.styleSheet(), Theme::dark().cardStyle);
+
+        Task colored{"Colored"};
+        colored.color = "#30a46c";
+        CardWidget b(colored, 0, 0, 0, Theme::dark());
+        QVERIFY(b.styleSheet().startsWith(Theme::dark().cardStyle));
+        QVERIFY(b.styleSheet().contains("border: 2px solid #30a46c"));
+    }
+
+    void framePalette_colorsAreValidAndUnique()
+    {
+        QSet<QString> seen;
+        for (const auto &[name, hex] : CardWidget::framePalette()) {
+            QVERIFY(!name.isEmpty());
+            QCOMPARE(MarkdownIO::normalizeColor(hex), hex);
+            QVERIFY(!seen.contains(hex));
+            seen.insert(hex);
+        }
+    }
+
+    void cardPriorityAndColorRequests_areForwarded()
+    {
+        ColumnWidget col(*m_state, 0, 0, Theme::light());
+        QSignalSpy prio(&col, &ColumnWidget::taskPriorityChanged);
+        QSignalSpy color(&col, &ColumnWidget::taskColorChanged);
+
+        auto *card = col.findChild<CardWidget *>();
+        QVERIFY(card);
+        emit card->priorityChangeRequested(0, 0, Priority::Urgent);
+        emit card->colorChangeRequested(0, 0, "#3e63dd");
+
+        QCOMPARE(prio.count(), 1);
+        QCOMPARE(prio[0][2].value<Priority>(), Priority::Urgent);
+        QCOMPARE(color.count(), 1);
+        QCOMPARE(color[0][2].toString(), QString("#3e63dd"));
     }
 
 private:

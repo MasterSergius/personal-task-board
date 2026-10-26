@@ -307,6 +307,121 @@ private slots:
         QCOMPARE(projects.size(), 2);
         QCOMPARE(projects[1].columns[0].name, QString("FromB"));
     }
+
+    // ── Priority / color fields ───────────────────────────────────────────────
+
+    void parse_priorityAndColorFields()
+    {
+        const Project p = MarkdownIO::parse(
+            "## Col\n- [ ] Fix login [priority:: high] [color:: #E5484D]\n- [ ] Plain\n", "P");
+        const auto &tasks = p.columns[0].tasks;
+        QCOMPARE(tasks[0].title,    QString("Fix login"));
+        QCOMPARE(tasks[0].priority, Priority::High);
+        QCOMPARE(tasks[0].color,    QString("#e5484d"));
+        QCOMPARE(tasks[1].priority, Priority::None);
+        QVERIFY(tasks[1].color.isEmpty());
+    }
+
+    void parse_fields_anyOrderCaseAndPosition()
+    {
+        const Project p = MarkdownIO::parse(
+            "## Col\n"
+            "- [x] [Color::#abc] [PRIORITY:: Urgent] Ship it\n"
+            "- [ ] Before [priority:: low] after\n", "P");
+        const auto &tasks = p.columns[0].tasks;
+        QCOMPARE(tasks[0].title,    QString("Ship it"));
+        QCOMPARE(tasks[0].done,     true);
+        QCOMPARE(tasks[0].priority, Priority::Urgent);
+        QCOMPARE(tasks[0].color,    QString("#aabbcc"));
+        QCOMPARE(tasks[1].title,    QString("Before after"));
+        QCOMPARE(tasks[1].priority, Priority::Low);
+    }
+
+    void parse_unrecognisedFields_stayInTitle()
+    {
+        const QString title = "T [priority:: someday] [color:: red] [due:: 2026-11-01]";
+        const Project p = MarkdownIO::parse("## Col\n- [ ] " + title + "\n", "P");
+        const Task &t = p.columns[0].tasks[0];
+        QCOMPARE(t.title,    title);
+        QCOMPARE(t.priority, Priority::None);
+        QVERIFY(t.color.isEmpty());
+    }
+
+    void parse_duplicateField_firstWinsRestKept()
+    {
+        const Project p = MarkdownIO::parse(
+            "## Col\n- [ ] T [priority:: high] [priority:: low]\n", "P");
+        const Task &t = p.columns[0].tasks[0];
+        QCOMPARE(t.priority, Priority::High);
+        QCOMPARE(t.title,    QString("T [priority:: low]"));
+    }
+
+    void serialize_writesFieldsAfterTitle()
+    {
+        Task t{"Fix login"};
+        t.priority = Priority::High;
+        t.color    = "#e5484d";
+        Task onlyColor{"Docs"};
+        onlyColor.color = "#30a46c";
+
+        const Project p{"P", {Column{"Col", {t, onlyColor, Task{"Plain"}}}}};
+        QCOMPARE(MarkdownIO::serialize(p),
+                 QString("## Col\n\n"
+                         "- [ ] Fix login [priority:: high] [color:: #e5484d]\n"
+                         "- [ ] Docs [color:: #30a46c]\n"
+                         "- [ ] Plain\n"));
+    }
+
+    void priorityAndColor_roundTripThroughDisk()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+
+        Task t{"Task", true};
+        t.priority = Priority::Medium;
+        t.color    = "#8e4ec6";
+        QVERIFY(MarkdownIO::save(dir.path(), Project{"P", {Column{"Col", {t}}}}));
+
+        const Task got = MarkdownIO::loadAll(dir.path())[0].columns[0].tasks[0];
+        QCOMPARE(got.title,    QString("Task"));
+        QCOMPARE(got.done,     true);
+        QCOMPARE(got.priority, Priority::Medium);
+        QCOMPARE(got.color,    QString("#8e4ec6"));
+    }
+
+    void priorityFromName()
+    {
+        QCOMPARE(MarkdownIO::priorityFromName("low"),      std::optional(Priority::Low));
+        QCOMPARE(MarkdownIO::priorityFromName(" Medium "), std::optional(Priority::Medium));
+        QCOMPARE(MarkdownIO::priorityFromName("HIGH"),     std::optional(Priority::High));
+        QCOMPARE(MarkdownIO::priorityFromName("urgent"),   std::optional(Priority::Urgent));
+        QVERIFY(!MarkdownIO::priorityFromName("none"));
+        QVERIFY(!MarkdownIO::priorityFromName(""));
+        QVERIFY(!MarkdownIO::priorityFromName("critical"));
+    }
+
+    void normalizeColor_data()
+    {
+        QTest::addColumn<QString>("input");
+        QTest::addColumn<QString>("expected");
+
+        QTest::newRow("lower6")   << QString("#e5484d")  << QString("#e5484d");
+        QTest::newRow("upper6")   << QString("#E5484D")  << QString("#e5484d");
+        QTest::newRow("short")    << QString("#AbC")     << QString("#aabbcc");
+        QTest::newRow("padded")   << QString(" #123456 ") << QString("#123456");
+        QTest::newRow("noHash")   << QString("e5484d")   << QString();
+        QTest::newRow("name")     << QString("red")      << QString();
+        QTest::newRow("badHex")   << QString("#ggg")     << QString();
+        QTest::newRow("alpha")    << QString("#11223344") << QString();
+        QTest::newRow("empty")    << QString()           << QString();
+    }
+
+    void normalizeColor()
+    {
+        QFETCH(QString, input);
+        QFETCH(QString, expected);
+        QCOMPARE(MarkdownIO::normalizeColor(input), expected);
+    }
 };
 
 QTEST_GUILESS_MAIN(TestMarkdownIO)

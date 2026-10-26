@@ -8,9 +8,13 @@
 // Plain value structs — no Qt parent, no signals. All mutation goes through
 // AppState so that persistence is always kept in sync.
 
+enum class Priority { None, Low, Medium, High, Urgent };
+
 struct Task {
-    QString title;
-    bool    done = false;   // "- [x]" in Markdown; preserved on save
+    QString  title;
+    bool     done     = false;            // "- [x]" in Markdown; preserved on save
+    Priority priority = Priority::None;   // "[priority:: high]"
+    QString  color;                       // "[color:: #e5484d]"; empty = theme default
 };
 
 struct Column {

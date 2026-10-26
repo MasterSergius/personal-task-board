@@ -488,6 +488,79 @@ private slots:
         QVERIFY(saved.contains("- [ ] B\n"));
         QVERIFY(saved.trimmed().endsWith("%% kanban:settings\n%%"));
     }
+    // ── Priority / color ──────────────────────────────────────────────────────
+
+    void setTaskPriorityAndColor_persist()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        {
+            AppState s(dir.path());
+            s.load();
+            s.addProject("P");
+            s.addColumn(0, "Col");
+            s.addTask(0, 0, "T");
+            s.setTaskPriority(0, 0, 0, Priority::Urgent);
+            QVERIFY(s.setTaskColor(0, 0, 0, "#3E63DD"));
+            QCOMPARE(s.project(0).columns[0].tasks[0].color, QString("#3e63dd"));
+        }
+
+        AppState s2(dir.path());
+        s2.load();
+        const Task &t = s2.project(0).columns[0].tasks[0];
+        QCOMPARE(t.title,    QString("T"));
+        QCOMPARE(t.priority, Priority::Urgent);
+        QCOMPARE(t.color,    QString("#3e63dd"));
+    }
+
+    void setTaskColor_invalid_isRejected_emptyResets()
+    {
+        auto [s, dir] = makeState();
+        s.addProject("P");
+        s.addColumn(0, "Col");
+        s.addTask(0, 0, "T");
+
+        QVERIFY(s.setTaskColor(0, 0, 0, "#30a46c"));
+        QVERIFY(!s.setTaskColor(0, 0, 0, "green"));
+        QCOMPARE(s.project(0).columns[0].tasks[0].color, QString("#30a46c"));
+
+        QVERIFY(s.setTaskColor(0, 0, 0, QString()));
+        QVERIFY(s.project(0).columns[0].tasks[0].color.isEmpty());
+    }
+
+    void setTaskPriorityAndColor_outOfRange_areIgnored()
+    {
+        auto [s, dir] = makeState();
+        s.addProject("P");
+        s.addColumn(0, "Col");
+        s.addTask(0, 0, "T");
+
+        s.setTaskPriority(0, 0, 5, Priority::High);
+        s.setTaskPriority(0, 3, 0, Priority::High);
+        s.setTaskPriority(2, 0, 0, Priority::High);
+        QVERIFY(!s.setTaskColor(0, 0, -1, "#ffffff"));
+        QVERIFY(!s.setTaskColor(1, 0, 0, "#ffffff"));
+
+        QCOMPARE(s.project(0).columns[0].tasks[0].priority, Priority::None);
+        QVERIFY(s.project(0).columns[0].tasks[0].color.isEmpty());
+    }
+
+    void moveTask_keepsPriorityAndColor()
+    {
+        auto [s, dir] = makeState();
+        s.addProject("P");
+        s.addColumn(0, "A");
+        s.addColumn(0, "B");
+        s.addTask(0, 0, "T");
+        s.setTaskPriority(0, 0, 0, Priority::Low);
+        s.setTaskColor(0, 0, 0, "#d6409f");
+
+        s.moveTask(0, 0, 0, 1);
+
+        const Task &t = s.project(0).columns[1].tasks[0];
+        QCOMPARE(t.priority, Priority::Low);
+        QCOMPARE(t.color,    QString("#d6409f"));
+    }
 };
 
 QTEST_GUILESS_MAIN(TestAppState)

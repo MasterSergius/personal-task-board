@@ -12,6 +12,7 @@ A minimalistic multi-project Kanban board for personal use, built with C++ and Q
 - **Multiple projects** — create, rename, and delete projects from the left panel
 - **Columns** — add, rename, reorder (left/right), and delete columns via right-click on the column header
 - **Tasks** — add tasks via the "+ Add Task" button; delete via right-click on a card
+- **Priority & frame color** — right-click a card to set a priority (Urgent / High / Medium / Low, shown as a colored badge) and a frame color (preset palette or any custom color)
 - **Drag & drop** — move tasks between columns by dragging
 - **Persistent storage** — every change is saved immediately (atomically) to a Markdown file in `~/.ptb/projects/`
 
@@ -22,8 +23,8 @@ Each project is stored as `~/.ptb/projects/<project-name>.md`:
 ```markdown
 ## To Do
 
-- [ ] Player movement
-- [ ] Enemy AI
+- [ ] Player movement [priority:: high]
+- [ ] Enemy AI [color:: #3e63dd]
 
 ## In Progress
 
@@ -35,6 +36,9 @@ Each project is stored as `~/.ptb/projects/<project-name>.md`:
 ```
 
 The format is compatible with the [Obsidian Kanban plugin](https://github.com/mgmeyers/obsidian-kanban).
+Priority and frame color are stored as [Dataview](https://blacksmithgu.github.io/obsidian-dataview/)
+inline fields — `[priority:: low|medium|high|urgent]` and `[color:: #rrggbb]` — so they stay readable
+in Obsidian. Unrecognised values are left untouched in the task title.
 Checked tasks (`- [x]`) keep their state, and content the app doesn't edit — YAML front matter,
 the `***` archive section and the `%% kanban:settings` block — is preserved verbatim on save.
 

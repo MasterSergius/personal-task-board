@@ -2,6 +2,7 @@
 
 #include <QFrame>
 #include <QPoint>
+#include "model/types.h"
 #include "theme.h"
 
 class QLabel;
@@ -13,7 +14,8 @@ class QContextMenuEvent;
  *
  * Supports:
  *  - Drag to move between columns (MIME type CardWidget::MimeType)
- *  - Right-click context menu to delete the task
+ *  - Priority badge and custom frame color
+ *  - Right-click context menu to set priority / frame color or delete the task
  *
  * The card carries its own position indices so the drop target can update
  * the model without needing a reference to the source column.
@@ -23,10 +25,17 @@ class CardWidget : public QFrame
     Q_OBJECT
 
 public:
-    CardWidget(const QString &title, int projectIdx, int colIdx, int taskIdx,
+    CardWidget(const Task &task, int projectIdx, int colIdx, int taskIdx,
                const Theme &theme, QWidget *parent = nullptr);
 
     static constexpr const char *MimeType = "application/x-ptb-task";
+
+    /** Preset frame colors offered in the context menu: {label, "#rrggbb"}. */
+    static const QList<QPair<QString, QString>> &framePalette();
+
+    /** Badge text and background color for a priority (empty for None). */
+    static QString priorityLabel(Priority priority);
+    static QString priorityColor(Priority priority);
 
     /** Called by the drop target while the drag is in progress. */
     void setDropColumn(int colIdx) { m_dropColIdx = colIdx; }
@@ -41,6 +50,11 @@ signals:
      */
     void moveRequested(int fromColIdx, int taskIdx, int toColIdx);
 
+    void priorityChangeRequested(int colIdx, int taskIdx, Priority priority);
+
+    /** color is "#rrggbb", or empty to reset to the theme default. */
+    void colorChangeRequested(int colIdx, int taskIdx, const QString &color);
+
 protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
@@ -52,6 +66,10 @@ private:
     int m_taskIdx;
     int m_dropColIdx = -1;
 
+    Priority m_priority;
+    QString  m_color;
+
+    QLabel  *m_badge        = nullptr;
     QLabel  *m_label        = nullptr;
     QPoint   m_dragStartPos;
     Theme    m_theme;

@@ -27,6 +27,16 @@ bool AppState::validColumn(int projectIdx, int colIdx) const
         && colIdx >= 0 && colIdx < m_projects[projectIdx].columns.size();
 }
 
+Task *AppState::taskAt(int projectIdx, int colIdx, int taskIdx)
+{
+    if (!validColumn(projectIdx, colIdx))
+        return nullptr;
+    auto &tasks = m_projects[projectIdx].columns[colIdx].tasks;
+    if (taskIdx < 0 || taskIdx >= tasks.size())
+        return nullptr;
+    return &tasks[taskIdx];
+}
+
 // ─── Projects ─────────────────────────────────────────────────────────────────
 
 int AppState::projectCount() const
@@ -179,4 +189,30 @@ void AppState::moveTask(int projectIdx, int fromColIdx, int taskIdx, int toColId
     Task task = from.takeAt(taskIdx);
     m_projects[projectIdx].columns[toColIdx].tasks.append(task);
     save(projectIdx);
+}
+
+void AppState::setTaskPriority(int projectIdx, int colIdx, int taskIdx, Priority priority)
+{
+    Task *task = taskAt(projectIdx, colIdx, taskIdx);
+    if (!task || task->priority == priority)
+        return;
+    task->priority = priority;
+    save(projectIdx);
+}
+
+bool AppState::setTaskColor(int projectIdx, int colIdx, int taskIdx, const QString &color)
+{
+    Task *task = taskAt(projectIdx, colIdx, taskIdx);
+    if (!task)
+        return false;
+
+    const QString normalized = MarkdownIO::normalizeColor(color);
+    if (!color.isEmpty() && normalized.isEmpty())
+        return false;
+
+    if (task->color != normalized) {
+        task->color = normalized;
+        save(projectIdx);
+    }
+    return true;
 }

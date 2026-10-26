@@ -5,6 +5,19 @@ BUILD_TYPE ?= Debug
 
 all: build
 
+# ── Stale build directory guard ───────────────────────────────────────────────
+# CMake refuses to reuse a build directory configured from another path (e.g.
+# the project was built inside a container, then on the host). Detect that via
+# the cache's recorded location and start from a clean build directory.
+
+CACHED_BUILD_DIR := $(shell sed -n 's/^CMAKE_CACHEFILE_DIR:INTERNAL=//p' $(BUILD_DIR)/CMakeCache.txt 2>/dev/null)
+ifneq ($(CACHED_BUILD_DIR),)
+ifneq ($(realpath $(CACHED_BUILD_DIR)),$(realpath $(BUILD_DIR)))
+$(info $(BUILD_DIR)/ was configured at $(CACHED_BUILD_DIR); recreating it)
+$(shell rm -rf -- '$(BUILD_DIR)')
+endif
+endif
+
 # ── Configuration ─────────────────────────────────────────────────────────────
 # CMakeCache.txt is used as a stamp: cmake only runs when the build directory
 # doesn't exist yet. After that, `cmake --build` detects CMakeLists.txt changes

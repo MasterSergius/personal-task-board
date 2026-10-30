@@ -12,6 +12,7 @@
 - Projects whose names differ only in case could overwrite each other's file on case-insensitive file systems
 - Renaming a project ignored file-system errors, leaving the old file behind
 - UTF-8 BOM at the start of a board file hid the first column
+- Indented lines under a task (e.g. notes written in Obsidian) were dropped on the next save; they are now kept as the task's description
 
 ### Changed
 - Board files are written atomically via `QSaveFile`
@@ -24,6 +25,10 @@
 - Custom task frame color: preset palette or any color via a color picker
 - Both are set from the card's right-click menu and stored as Dataview inline fields (`[priority:: high]`, `[color:: #e5484d]`)
 - Tests for parsing, serialisation, persistence and card rendering of the new fields
+- Task editor dialog, opened by double-clicking a card or via *Open…* in its context menu: edit the title and a rich-text description (bold, italic, strikethrough, inline code, headings, bullet / numbered / check lists, links, images)
+- Images can be pasted or dropped into the description; they are written to `attachments/` next to the boards only when the task is saved
+- Descriptions are stored as Markdown indented under the task line; cards show a description preview and check-list progress
+- Tests for description parsing / serialisation, the editor's Markdown round trip, image attachments, the toolbar and card preview
 
 ## [0.4.0] — 2026-04-15
 

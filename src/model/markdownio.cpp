@@ -82,6 +82,55 @@ static QString trimTrailing(const QString &s)
     return s.left(end);
 }
 
+// Width of a line's leading whitespace, counting a tab as 4 columns.
+static int indentWidth(const QString &line)
+{
+    int width = 0;
+    for (const QChar c : line) {
+        if (c == ' ')
+            width += 1;
+        else if (c == '\t')
+            width += 4;
+        else
+            break;
+    }
+    return width;
+}
+
+// Removes up to `columns` columns of leading whitespace.
+static QString stripIndent(const QString &line, int columns)
+{
+    int width = 0;
+    qsizetype i = 0;
+    while (i < line.size() && width < columns) {
+        if (line.at(i) == ' ')
+            width += 1;
+        else if (line.at(i) == '\t')
+            width += 4;
+        else
+            break;
+        ++i;
+    }
+    return line.mid(i);
+}
+
+// Turns the indented lines below a task back into its Markdown description.
+// The common indentation is removed, but never more than one level (4
+// columns), so content that is itself indented (e.g. a code block) keeps it.
+static QString dedentDescription(const QStringList &lines)
+{
+    int common = 4;
+    for (const QString &line : lines)
+        if (!line.trimmed().isEmpty())
+            common = qMin(common, indentWidth(line));
+
+    QStringList out;
+    out.reserve(lines.size());
+    for (const QString &line : lines)
+        out.append(line.trimmed().isEmpty() ? QString() : trimTrailing(stripIndent(line, common)));
+    return trimTrailing(out.join('\n'));
+}
+
 // ─── Task metadata ────────────────────────────────────────────────────────────
 
 QString MarkdownIO::priorityName(Priority priority)
@@ -117,6 +166,13 @@ QString MarkdownIO::normalizeColor(const QString &color)
     return c;
 }
 
+QString MarkdownIO::withImageAltText(const QString &markdown)
+{
+    static const QRegularExpression emptyAltRe(R"(!\[\s*\]\()");
+    QString out = markdown;
+    return out.replace(emptyAltRe, "![image](");
+}
+
 // ─── Parsing / serialisation ──────────────────────────────────────────────────
 
 Project MarkdownIO::parse(const QString &text, const QString &projectName)
@@ -128,6 +184,20 @@ Project MarkdownIO::parse(const QString &text, const QString &projectName)
     QStringList footerLines;
     Column *currentColumn = nullptr;
     bool inFooter = false;
+
+    // Description of the most recent task: indented lines below it, with
+    // blank lines kept only when more indented content follows them.
+    Task *currentTask = nullptr;
+    QStringList descriptionLines;
+    int pendingBlankLines = 0;
+
+    auto finishTask = [&] {
+        if (currentTask && !descriptionLines.isEmpty())
+            currentTask->description = dedentDescription(descriptionLines);
+        currentTask = nullptr;
+        descriptionLines.clear();
+        pendingBlankLines = 0;
+    };
 
     const QStringList lines = text.split('\n');
     for (QString line : lines) {
@@ -141,20 +211,34 @@ Project MarkdownIO::parse(const QString &text, const QString &projectName)
 
         if (line.startsWith("## ")) {
             // Start a new column
+            finishTask();
             project.columns.append(Column{line.mid(3).trimmed(), {}});
             currentColumn = &project.columns.last();
         } else if (!currentColumn) {
             headerLines.append(line);
+        } else if (currentTask && line.trimmed().isEmpty()) {
+            ++pendingBlankLines;
+        } else if (currentTask && (line.startsWith(' ') || line.startsWith('\t'))) {
+            if (!descriptionLines.isEmpty())
+                for (; pendingBlankLines > 0; --pendingBlankLines)
+                    descriptionLines.append(QString());
+            pendingBlankLines = 0;
+            descriptionLines.append(line);
         } else if (line.trimmed() == "***" || line.startsWith("%%")) {
             // Obsidian archive separator / settings block: keep the rest as-is
+            finishTask();
             inFooter = true;
             footerLines.append(line);
         } else {
+            finishTask();
             Task task;
-            if (parseTaskLine(line, task))
+            if (parseTaskLine(line, task)) {
                 currentColumn->tasks.append(task);
+                currentTask = &currentColumn->tasks.last();
+            }
         }
     }
+    finishTask();
 
     project.header = trimTrailing(headerLines.join('\n'));
     project.footer = trimTrailing(footerLines.join('\n'));
@@ -180,6 +264,13 @@ QString MarkdownIO::serialize(const Project &project)
             if (!task.color.isEmpty())
                 out += " [color:: " + task.color + "]";
             out += "\n";
+
+            // Indented so Markdown (and this parser) nest it under the task.
+            if (!task.description.trimmed().isEmpty()) {
+                const QStringList descLines = trimTrailing(task.description).split('\n');
+                for (const QString &line : descLines)
+                    out += line.trimmed().isEmpty() ? QString("\n") : "    " + trimTrailing(line) + "\n";
+            }
         }
 
         // Blank line between columns

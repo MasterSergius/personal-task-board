@@ -15,6 +15,8 @@ class QContextMenuEvent;
  * Supports:
  *  - Drag to move between columns (MIME type CardWidget::MimeType)
  *  - Priority badge and custom frame color
+ *  - Description preview and check-list progress
+ *  - Double-click (or "Open…" in the context menu) to open the task editor
  *  - Right-click context menu to set priority / frame color or delete the task
  *
  * The card carries its own position indices so the drop target can update
@@ -37,6 +39,12 @@ public:
     static QString priorityLabel(Priority priority);
     static QString priorityColor(Priority priority);
 
+    /** Plain-text summary of a Markdown description, at most maxLength characters. */
+    static QString descriptionPreview(const QString &markdown, int maxLength = 120);
+
+    /** {checked, total} check-list items ("- [ ]" / "- [x]") in a description. */
+    static QPair<int, int> checkListProgress(const QString &markdown);
+
     /** Called by the drop target while the drag is in progress. */
     void setDropColumn(int colIdx) { m_dropColIdx = colIdx; }
 
@@ -55,9 +63,13 @@ signals:
     /** color is "#rrggbb", or empty to reset to the theme default. */
     void colorChangeRequested(int colIdx, int taskIdx, const QString &color);
 
+    /** Emitted on double-click or "Open…": the task editor should be shown. */
+    void openRequested(int colIdx, int taskIdx);
+
 protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
 
 private:

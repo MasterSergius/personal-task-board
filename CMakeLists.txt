@@ -29,6 +29,8 @@ add_executable(ptb
     src/boardview.cpp
     src/columnwidget.cpp
     src/cardwidget.cpp
+    src/descriptionedit.cpp
+    src/taskdialog.cpp
 )
 target_link_libraries(ptb ptb_model Qt6::Widgets)
 

@@ -28,6 +28,7 @@ struct Theme {
     // Card frame + label
     QString cardStyle;
     QString cardLabelStyle;
+    QString cardDescStyle;   // description preview / checklist progress
 
     // Buttons & menus
     QString addColumnBtnStyle;
@@ -63,6 +64,7 @@ struct Theme {
             "QFrame { border: 1px solid #555; border-radius: 6px; background: #3a3a3a; }"
             "QFrame:hover { background: #444; border-color: #777; }";
         t.cardLabelStyle = "border: none; background: transparent; color: #ddd;";
+        t.cardDescStyle  = "border: none; background: transparent; color: #999; font-size: 11px;";
 
         t.addColumnBtnStyle =
             "QPushButton { color: #888; border: 2px dashed #555; border-radius: 8px;"
@@ -109,6 +111,7 @@ struct Theme {
             "QFrame { border: 1px solid #b0b0b0; border-radius: 6px; background: #fafafa; }"
             "QFrame:hover { background: #f0f0f0; border-color: #888; }";
         t.cardLabelStyle = "border: none; background: transparent; color: #111;";
+        t.cardDescStyle  = "border: none; background: transparent; color: #666; font-size: 11px;";
 
         t.addColumnBtnStyle =
             "QPushButton { color: #666; border: 2px dashed #aaa; border-radius: 8px;"

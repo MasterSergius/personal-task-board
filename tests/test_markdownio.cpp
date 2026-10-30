@@ -422,6 +422,142 @@ private slots:
         QFETCH(QString, expected);
         QCOMPARE(MarkdownIO::normalizeColor(input), expected);
     }
+    // ── Descriptions ──────────────────────────────────────────────────────────
+
+    void parse_description_indentedLinesBelongToTask()
+    {
+        const Project p = MarkdownIO::parse(
+            "## Col\n\n"
+            "- [ ] A [priority:: high]\n"
+            "    First **line**\n"
+            "\n"
+            "    Second paragraph\n"
+            "    - [ ] sub\n"
+            "      - nested\n"
+            "- [x] B\n", "P");
+
+        QCOMPARE(p.columns[0].tasks.size(), 2);
+        const Task &a = p.columns[0].tasks[0];
+        QCOMPARE(a.title,    QString("A"));
+        QCOMPARE(a.priority, Priority::High);
+        QCOMPARE(a.description,
+                 QString("First **line**\n\nSecond paragraph\n- [ ] sub\n  - nested"));
+        QVERIFY(p.columns[0].tasks[1].description.isEmpty());
+        QCOMPARE(p.columns[0].tasks[1].done, true);
+    }
+
+    void parse_description_blankLinesAloneAreNotDescription()
+    {
+        const Project p = MarkdownIO::parse("## Col\n\n- [ ] A\n\n\n- [ ] B\n\n## Next\n\n- [ ] C\n", "P");
+        QCOMPARE(p.columns.size(), 2);
+        QCOMPARE(p.columns[0].tasks.size(), 2);
+        for (const Column &c : p.columns)
+            for (const Task &t : c.tasks)
+                QVERIFY2(t.description.isEmpty(), qPrintable(t.title));
+    }
+
+    // Obsidian and hand-written files indent with a tab or two spaces.
+    void parse_description_otherIndentation()
+    {
+        const Project p = MarkdownIO::parse(
+            "## Col\n- [ ] Tab\n\tline one\n\t\tdeeper\n- [ ] Two\n  two\n    nested\n", "P");
+        QCOMPARE(p.columns[0].tasks[0].description, QString("line one\n\tdeeper"));
+        QCOMPARE(p.columns[0].tasks[1].description, QString("two\n  nested"));
+    }
+
+    // Only one level is removed, so a code block indented further keeps it.
+    void parse_description_keepsDeeperIndent()
+    {
+        const Project p = MarkdownIO::parse("## Col\n- [ ] A\n        code\n        more\n", "P");
+        QCOMPARE(p.columns[0].tasks[0].description, QString("    code\n    more"));
+    }
+
+    // Indented lines that look like headings, separators or tasks belong to
+    // the description; they must not start a column, the footer or a task.
+    void parse_description_specialLinesStayInDescription()
+    {
+        const Project p = MarkdownIO::parse(
+            "## Col\n- [ ] A\n    ## not a column\n    ***\n    - [ ] not a task\n"
+            "%% kanban:settings\n%%\n", "P");
+        QCOMPARE(p.columns.size(), 1);
+        QCOMPARE(p.columns[0].tasks.size(), 1);
+        QCOMPARE(p.columns[0].tasks[0].description,
+                 QString("## not a column\n***\n- [ ] not a task"));
+        QVERIFY(p.footer.startsWith("%% kanban:settings"));
+    }
+
+    // Indented lines used to be dropped silently, losing them on the next save.
+    void parse_indentedLinesUnderTask_surviveSave()
+    {
+        const QString text = "## Col\n\n- [ ] A\n    note\n";
+        QCOMPARE(MarkdownIO::serialize(MarkdownIO::parse(text, "P")), text);
+    }
+
+    void serialize_description_isIndented()
+    {
+        Task t{"A"};
+        t.priority    = Priority::Low;
+        t.description = "Line 1\n\n  - item\n";
+        const Project p{"P", {Column{"Col", {t, Task{"B"}}}}};
+
+        QCOMPARE(MarkdownIO::serialize(p),
+                 QString("## Col\n\n"
+                         "- [ ] A [priority:: low]\n"
+                         "    Line 1\n"
+                         "\n"
+                         "      - item\n"
+                         "- [ ] B\n"));
+    }
+
+    void description_roundTripThroughDisk()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+
+        const QString description =
+            "# Heading\n\n"
+            "Some *text* with a [link](https://example.org).\n\n"
+            "- [x] done\n- [ ] todo\n\n"
+            "![](attachments/20261030-120000-abcdef.png)\n\n"
+            "```\nindented:\n    code\n```";
+        Task t{"Task", false, Priority::Urgent, "#e5484d", description};
+        MarkdownIO::save(dir.path(), Project{"P", {Column{"Col", {t}}, Column{"Done", {Task{"X"}}}}});
+
+        const auto projects = MarkdownIO::loadAll(dir.path());
+        const Task &loaded = projects[0].columns[0].tasks[0];
+        QCOMPARE(loaded.title,       QString("Task"));
+        QCOMPARE(loaded.priority,    Priority::Urgent);
+        QCOMPARE(loaded.color,       QString("#e5484d"));
+        QCOMPARE(loaded.description, description);
+        QCOMPARE(projects[0].columns[1].tasks[0].title, QString("X"));
+    }
+
+    void description_crlfFile()
+    {
+        const Project p = MarkdownIO::parse("## Col\r\n- [ ] A\r\n    one\r\n\r\n    two\r\n", "P");
+        QCOMPARE(p.columns[0].tasks[0].description, QString("one\n\ntwo"));
+    }
+
+    void obsidianBoard_withDescriptions_roundTripsExactly()
+    {
+        const QString original =
+            "---\n\nkanban-plugin: board\n\n---\n\n"
+            "## Todo\n\n- [ ] One\n    details\n\n    more\n\n"
+            "## Done\n\n- [x] Two\n\n"
+            "***\n\n## Archive\n\n- [x] Old\n\n"
+            "%% kanban:settings\n```\n{\"kanban-plugin\":\"board\"}\n```\n%%\n";
+
+        const Project p = MarkdownIO::parse(original, "Obs");
+        QCOMPARE(p.columns[0].tasks[0].description, QString("details\n\nmore"));
+        QCOMPARE(MarkdownIO::serialize(p), original);
+    }
+    void withImageAltText()
+    {
+        QCOMPARE(MarkdownIO::withImageAltText("a ![](x.png) b ![ ](y.png) ![alt](z.png)"),
+                 QString("a ![image](x.png) b ![image](y.png) ![alt](z.png)"));
+        QCOMPARE(MarkdownIO::withImageAltText("[](link) and ![[embed.png]]"),
+                 QString("[](link) and ![[embed.png]]"));
+    }
 };
 
 QTEST_GUILESS_MAIN(TestMarkdownIO)

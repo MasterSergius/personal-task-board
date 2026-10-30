@@ -7,6 +7,7 @@
 #include <QWidget>
 
 #include "columnwidget.h"
+#include "taskdialog.h"
 
 BoardView::BoardView(AppState &state, QWidget *parent)
     : QWidget(parent)
@@ -140,12 +141,34 @@ void BoardView::refresh()
                         m_state.setTaskColor(m_projectIdx, colIdx, taskIdx, color);
                         refresh();
                     });
+            connect(col, &ColumnWidget::taskOpenRequested, this, &BoardView::openTask);
 
             m_columnsLayout->addWidget(col);
         }
     }
 
     m_columnsLayout->addWidget(m_addColumnBtn);
+}
+
+// ─── Task editor ──────────────────────────────────────────────────────────────
+
+void BoardView::openTask(int colIdx, int taskIdx)
+{
+    if (m_projectIdx < 0)
+        return;
+    const auto &columns = m_state.project(m_projectIdx).columns;
+    if (colIdx < 0 || colIdx >= columns.size()
+        || taskIdx < 0 || taskIdx >= columns[colIdx].tasks.size())
+        return;
+
+    // The dialog is modal, so the board (and the indices) can't change while
+    // it is open. Its copy of the task is applied only when saved.
+    TaskDialog dialog(columns[colIdx].tasks[taskIdx], m_state.boardsDir(), this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    m_state.setTaskDetails(m_projectIdx, colIdx, taskIdx, dialog.title(), dialog.description());
+    refresh();
 }
 
 // ─── Add column ───────────────────────────────────────────────────────────────

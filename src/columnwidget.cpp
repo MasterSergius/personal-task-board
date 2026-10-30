@@ -158,6 +158,8 @@ void ColumnWidget::buildCards()
                 this, &ColumnWidget::taskPriorityChanged);
         connect(card, &CardWidget::colorChangeRequested,
                 this, &ColumnWidget::taskColorChanged);
+        connect(card, &CardWidget::openRequested,
+                this, &ColumnWidget::taskOpenRequested);
         m_cardsLayout->addWidget(card);
     }
 }

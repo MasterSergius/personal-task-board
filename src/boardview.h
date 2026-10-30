@@ -33,6 +33,9 @@ public:
     /** Apply a new theme and rebuild the board. */
     void applyTheme(const Theme &theme);
 
+    /** Show the task editor for a task of the current project and apply the result. */
+    void openTask(int colIdx, int taskIdx);
+
 private slots:
     void onAddColumnClicked();
 

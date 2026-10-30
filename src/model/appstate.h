@@ -22,6 +22,9 @@ public:
     /** Load all projects from disk. Call once at startup. */
     void load();
 
+    /** Directory holding the board files (and the attachments folder). */
+    const QString &boardsDir() const { return m_boardsDir; }
+
     // ── Projects ─────────────────────────────────────────────────────────────
 
     int projectCount() const;
@@ -81,6 +84,14 @@ public:
      * it to the theme default. Returns false (no change) for an invalid color.
      */
     bool setTaskColor(int projectIdx, int colIdx, int taskIdx, const QString &color);
+
+    /**
+     * Set the task's title and Markdown description. Line breaks in the title
+     * are replaced by spaces. Returns false (no change) if the title is empty
+     * or an index is out of range.
+     */
+    bool setTaskDetails(int projectIdx, int colIdx, int taskIdx,
+                        const QString &title, const QString &description);
 
 private:
     void save(int projectIdx) const;

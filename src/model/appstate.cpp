@@ -216,3 +216,33 @@ bool AppState::setTaskColor(int projectIdx, int colIdx, int taskIdx, const QStri
     }
     return true;
 }
+
+bool AppState::setTaskDetails(int projectIdx, int colIdx, int taskIdx,
+                              const QString &title, const QString &description)
+{
+    Task *task = taskAt(projectIdx, colIdx, taskIdx);
+    if (!task)
+        return false;
+
+    // The title is a single Markdown line; the description is everything else.
+    QString cleanTitle = title;
+    cleanTitle.replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ');
+    cleanTitle = cleanTitle.trimmed();
+    if (cleanTitle.isEmpty())
+        return false;
+
+    QString cleanDescription = description;
+    cleanDescription.replace("\r\n", "\n").replace('\r', '\n');
+    // Drop leading blank lines and all trailing whitespace.
+    while (cleanDescription.startsWith('\n'))
+        cleanDescription.remove(0, 1);
+    while (!cleanDescription.isEmpty() && cleanDescription.back().isSpace())
+        cleanDescription.chop(1);
+
+    if (task->title != cleanTitle || task->description != cleanDescription) {
+        task->title       = cleanTitle;
+        task->description = cleanDescription;
+        save(projectIdx);
+    }
+    return true;
+}

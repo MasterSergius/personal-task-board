@@ -13,7 +13,11 @@
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QRegularExpression>
+#include <QTextDocument>
 #include <QVBoxLayout>
+
+#include "model/markdownio.h"
 
 // ─── Priority / color presentation ────────────────────────────────────────────
 
@@ -55,6 +59,35 @@ QString CardWidget::priorityColor(Priority priority)
     case Priority::None:   break;
     }
     return {};
+}
+
+QString CardWidget::descriptionPreview(const QString &markdown, int maxLength)
+{
+    if (markdown.trimmed().isEmpty())
+        return {};
+
+    QTextDocument doc;
+    doc.setMarkdown(MarkdownIO::withImageAltText(markdown), QTextDocument::MarkdownDialectGitHub);
+    QString text = doc.toPlainText();
+    text.replace(QChar::ObjectReplacementCharacter, " [image] ");   // inline images
+    text = text.simplified();
+
+    if (text.size() > maxLength)
+        text = text.left(maxLength - 1).trimmed() + QChar(0x2026);   // "…"
+    return text;
+}
+
+QPair<int, int> CardWidget::checkListProgress(const QString &markdown)
+{
+    static const QRegularExpression itemRe(R"(^\s*(?:[-*+]|\d+[.)])\s+\[([ xX])\](?:\s|$))",
+                                           QRegularExpression::MultilineOption);
+    int checked = 0, total = 0;
+    for (auto it = itemRe.globalMatch(markdown); it.hasNext();) {
+        ++total;
+        if (it.next().captured(1) != " ")
+            ++checked;
+    }
+    return {checked, total};
 }
 
 // Small filled circle used as a menu icon.
@@ -115,6 +148,25 @@ CardWidget::CardWidget(const Task &task, int projectIdx, int colIdx, int taskIdx
     m_label->setWordWrap(true);
     m_label->setStyleSheet(theme.cardLabelStyle);
     layout->addWidget(m_label);
+
+    const QString preview = descriptionPreview(task.description);
+    if (!preview.isEmpty()) {
+        auto *desc = new QLabel(preview);
+        desc->setObjectName("descriptionPreview");
+        desc->setWordWrap(true);
+        desc->setStyleSheet(theme.cardDescStyle);
+        layout->addWidget(desc);
+    }
+
+    const auto [checked, total] = checkListProgress(task.description);
+    if (total > 0) {
+        auto *progress = new QLabel(QString("☑ %1/%2").arg(checked).arg(total));
+        progress->setObjectName("checkListProgress");
+        progress->setStyleSheet(theme.cardDescStyle);
+        layout->addWidget(progress);
+    }
+
+    setToolTip("Double-click to open");
 }
 
 // ─── Drag ─────────────────────────────────────────────────────────────────────
@@ -166,6 +218,16 @@ void CardWidget::mouseMoveEvent(QMouseEvent *event)
     show();
 }
 
+// ─── Open ─────────────────────────────────────────────────────────────────────
+
+void CardWidget::mouseDoubleClickEvent(QMouseEvent *event)
+{
+    if (event->button() != Qt::LeftButton)
+        return;
+    m_dragStartPos = QPoint();
+    emit openRequested(m_colIdx, m_taskIdx);   // may rebuild the board (deleteLater)
+}
+
 // ─── Context menu ─────────────────────────────────────────────────────────────
 
 void CardWidget::contextMenuEvent(QContextMenuEvent *event)
@@ -178,6 +240,12 @@ void CardWidget::contextMenuEvent(QContextMenuEvent *event)
     // happen while the menu's nested event loop is still running.
     QHash<QAction *, Priority> priorityActions;
     QHash<QAction *, QString>  colorActions;   // empty value = theme default
+
+    QAction *openAction = menu.addAction("Open…");
+    QFont boldFont = openAction->font();
+    boldFont.setBold(true);
+    openAction->setFont(boldFont);   // the double-click default
+    menu.addSeparator();
 
     // ── Priority submenu ──────────────────────────────────────────────────────
     QMenu *priorityMenu = menu.addMenu("Priority");
@@ -232,6 +300,11 @@ void CardWidget::contextMenuEvent(QContextMenuEvent *event)
     QAction *selected = menu.exec(event->globalPos());
     if (!selected)
         return;
+
+    if (selected == openAction) {
+        emit openRequested(m_colIdx, m_taskIdx);
+        return;
+    }
 
     if (priorityActions.contains(selected)) {
         const Priority p = priorityActions.value(selected);

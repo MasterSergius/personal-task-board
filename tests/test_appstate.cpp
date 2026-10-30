@@ -561,6 +561,75 @@ private slots:
         QCOMPARE(t.priority, Priority::Low);
         QCOMPARE(t.color,    QString("#d6409f"));
     }
+    // ── Title / description ───────────────────────────────────────────────────
+
+    void setTaskDetails_persists()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        {
+            AppState s(dir.path());
+            s.load();
+            s.addProject("P");
+            s.addColumn(0, "Col");
+            s.addTask(0, 0, "Old");
+            s.setTaskPriority(0, 0, 0, Priority::High);
+            QVERIFY(s.setTaskDetails(0, 0, 0, "  New title ", "Some **notes**\n\n- [ ] step"));
+        }
+
+        AppState s2(dir.path());
+        s2.load();
+        const Task &t = s2.project(0).columns[0].tasks[0];
+        QCOMPARE(t.title,       QString("New title"));
+        QCOMPARE(t.description, QString("Some **notes**\n\n- [ ] step"));
+        QCOMPARE(t.priority,    Priority::High);
+    }
+
+    void setTaskDetails_normalizesInput()
+    {
+        auto [s, dir] = makeState();
+        s.addProject("P");
+        s.addColumn(0, "Col");
+        s.addTask(0, 0, "T");
+
+        QVERIFY(s.setTaskDetails(0, 0, 0, "two\nlines", "\n\r\nline 1\r\nline 2  \n\n"));
+        const Task &t = s.project(0).columns[0].tasks[0];
+        QCOMPARE(t.title,       QString("two lines"));
+        QCOMPARE(t.description, QString("line 1\nline 2"));
+
+        QVERIFY(s.setTaskDetails(0, 0, 0, "T", "   "));
+        QVERIFY(s.project(0).columns[0].tasks[0].description.isEmpty());
+    }
+
+    void setTaskDetails_invalid_isRejected()
+    {
+        auto [s, dir] = makeState();
+        s.addProject("P");
+        s.addColumn(0, "Col");
+        s.addTask(0, 0, "T");
+
+        QVERIFY(!s.setTaskDetails(0, 0, 0, "  \n ", "desc"));
+        QVERIFY(!s.setTaskDetails(0, 0, 1, "X", "desc"));
+        QVERIFY(!s.setTaskDetails(0, 1, 0, "X", "desc"));
+        QVERIFY(!s.setTaskDetails(1, 0, 0, "X", "desc"));
+
+        const Task &t = s.project(0).columns[0].tasks[0];
+        QCOMPARE(t.title, QString("T"));
+        QVERIFY(t.description.isEmpty());
+    }
+
+    void moveTask_keepsDescription()
+    {
+        auto [s, dir] = makeState();
+        s.addProject("P");
+        s.addColumn(0, "A");
+        s.addColumn(0, "B");
+        s.addTask(0, 0, "T");
+        s.setTaskDetails(0, 0, 0, "T", "notes");
+
+        s.moveTask(0, 0, 0, 1);
+        QCOMPARE(s.project(0).columns[1].tasks[0].description, QString("notes"));
+    }
 };
 
 QTEST_GUILESS_MAIN(TestAppState)

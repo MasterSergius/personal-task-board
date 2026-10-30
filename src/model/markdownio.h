@@ -21,8 +21,13 @@
  *   ## Another Column
  *
  *   - [ ] Another task [priority:: high] [color:: #e5484d]
+ *       Optional **Markdown** description, indented under its task.
+ *
+ *       ![](attachments/20261030-153012-a1b2c3.png)
  *
  * Task priority and frame color are stored as Dataview inline fields.
+ * A description is every indented (or blank) line following a task line;
+ * images it references live in the "attachments" folder next to the boards.
  * Anything before the first column heading (e.g. YAML front matter) and
  * everything from the first "***" or "%%" line onward (Obsidian's archive and
  * settings blocks) is preserved verbatim on save.
@@ -32,6 +37,9 @@
 class MarkdownIO
 {
 public:
+    /** Folder (relative to the boards directory) holding images pasted into descriptions. */
+    static constexpr const char *AttachmentsDir = "attachments";
+
     /** Load all *.md files from dir as projects. Returns empty if dir is absent. */
     static QList<Project> loadAll(const QString &dir);
 
@@ -66,6 +74,13 @@ public:
 
     /** "#RGB" / "#RRGGBB" → lowercase "#rrggbb"; empty if not a valid hex color. */
     static QString normalizeColor(const QString &color);
+
+    /**
+     * Gives images without alt text ("![](a.png)") the alt text "image".
+     * Qt 6's Markdown reader drops such images entirely, which would delete
+     * them from a description once it is edited and saved again.
+     */
+    static QString withImageAltText(const QString &markdown);
 
 private:
     static QString filePath(const QString &dir, const QString &name);

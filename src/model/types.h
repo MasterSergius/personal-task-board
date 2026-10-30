@@ -15,6 +15,7 @@ struct Task {
     bool     done     = false;            // "- [x]" in Markdown; preserved on save
     Priority priority = Priority::None;   // "[priority:: high]"
     QString  color;                       // "[color:: #e5484d]"; empty = theme default
+    QString  description;                 // Markdown, stored indented below the task line
 };
 
 struct Column {
